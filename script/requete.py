@@ -1,6 +1,5 @@
 import http.client
 import json 
-import os
 import requests
 from utils import get_access_token
 
