@@ -1,7 +1,0 @@
-http.client
-json
-os
-requests
-dotenv
-python 
-pandas

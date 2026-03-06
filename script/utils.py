@@ -1,6 +1,8 @@
 from dotenv import load_dotenv
 import os
 import requests
+import time
+from typing import Optional
 
 # recuperer les infor dans le fichier .env
 load_dotenv()
@@ -39,3 +41,73 @@ def get_access_token():
 
     print(f"Token obtenu (valide {expires_in}s)")
     return access_token
+
+
+def _make_headers(token: Optional[str] = None) -> dict:
+    """
+    Crée les headers d'authentification pour les requêtes API.
+    
+    Args:
+        token (Optional[str]): Token OAuth2. Si None, le récupère automatiquement.
+    
+    Returns:
+        dict: Headers avec Authorization et Accept.
+    """
+    if token is None:
+        token = get_access_token()
+    return {
+        'Authorization': f"Bearer {token}",
+        'Accept': "application/json"
+    }
+
+
+def _get_with_reauth(
+    url: str,
+    headers: dict,
+    params: dict,
+    max_attempts: int = 3,
+    timeout: int = 30
+) -> Optional[requests.Response]:
+    """
+    Effectue une requête GET avec gestion automatique du rafraîchissement du token en cas de 401.
+    
+    Args:
+        url (str): URL de l'API.
+        headers (dict): Headers de la requête (sera modifié si le token est rafraîchi).
+        params (dict): Paramètres de la requête.
+        max_attempts (int): Nombre maximal de tentatives (défaut: 3).
+        timeout (int): Timeout en secondes (défaut: 30).
+    
+    Returns:
+        Optional[requests.Response]: Objet Response ou None en cas d'erreur persistante.
+    """
+    attempt = 0
+    while attempt < max_attempts:
+        attempt += 1
+        try:
+            res = requests.get(url, headers=headers, params=params, timeout=timeout)
+        except requests.RequestException as e:
+            print(f"Erreur réseau lors de la requête (essai {attempt}/{max_attempts}): {e}")
+            if attempt < max_attempts:
+                time.sleep(1 * attempt)
+                continue
+            raise
+
+        if res.status_code == 401:
+            print(f"401 Unauthorized — tentative de rafraîchissement du token (essai {attempt}/{max_attempts})")
+            try:
+                new_token = get_access_token()
+                headers['Authorization'] = f"Bearer {new_token}"
+            except Exception as e:
+                print("Échec du rafraîchissement du token:", e)
+                # attendre avant la prochaine tentative
+                time.sleep(1 * attempt)
+                continue
+            # backoff avant le retry
+            time.sleep(0.5 * attempt)
+            continue
+
+        return res
+
+    # si on sort de la boucle, retourner la dernière réponse (probablement 401)
+    return res

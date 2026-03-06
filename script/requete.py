@@ -1,57 +1,99 @@
-import http.client
 import json 
 import requests
-from utils import get_access_token
+from utils import get_access_token, _make_headers, _get_with_reauth
 import time
+import datetime
+import os
 
-#utlis.py
-access_token = get_access_token()
+# Créer les headers d'authentification
+headers = _make_headers()
 
-conn = http.client.HTTPSConnection("api.francetravail.io")
+# bornes globales (datetime objects)
+GLOBAL_MIN_CREATION_DT = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1.5)
+GLOBAL_MAX_CREATION_DT = datetime.datetime.now(datetime.timezone.utc)- datetime.timedelta(days=0.5)
 
-headers = {
-    'Authorization': f"Bearer {access_token}",
-    'Accept': "application/json"
-}
+print(f"Récupération des offres créées entre {GLOBAL_MIN_CREATION_DT.isoformat()} et {GLOBAL_MAX_CREATION_DT.isoformat()}")
+# configuration : taille de la fenêtre en jours (modifiable)
+window_days = 0.05  # 12 heures, change to 1 for travailler par jours
 
-batch_size = 150
-start = 0
+typeContrat = "CDI" # ou "CDI"
+
+batch_size = 150 # nombre d'offres par page (max 150 selon la doc API)
 all_jobs = []
 
-while True:
+url = "https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search"
 
-    end=start + batch_size - 1
-    conn.request("GET", f"/partenaire/offresdemploi/v2/offres/search?typeContrat=CDI&tempsPlein=true&departement=75&range={start}-{end}", headers=headers)
+# boucle sur les fenêtres temporelles entre GLOBAL_MIN_CREATION_DT et GLOBAL_MAX_CREATION_DT
+window_start = GLOBAL_MIN_CREATION_DT
+while window_start < GLOBAL_MAX_CREATION_DT:
+    window_end = min(window_start + datetime.timedelta(days=window_days), GLOBAL_MAX_CREATION_DT)
 
-    res = conn.getresponse()
+    # format ISO attendue par l'API
+    min_iso = window_start.strftime("%Y-%m-%dT%H:%M:%SZ")
+    max_iso = window_end.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    data = res.read()
+    # pagination pour cette fenêtre
+    start = 0
+    while True:
+        end = start + batch_size - 1
+        params = {
+            "typeContrat": typeContrat,
+            "minCreationDate": min_iso,
+            "maxCreationDate": max_iso,
+            "range": f"{start}-{end}"
+        }
 
-    data_json = json.loads(data.decode("utf-8"))
+        try:
+            res = _get_with_reauth(url, headers, params, max_attempts=3, timeout=30)
+        except requests.RequestException as e:
+            print(f"Erreur requête pour la fenêtre {min_iso} -> {max_iso}: {e}")
+            break
 
-    jobs = data_json.get("resultats", [])
+        if res is None:
+            print(f"Aucune réponse pour la fenêtre {min_iso} -> {max_iso}")
+            break
 
-    if not jobs:
-        break
+        if res.status_code == 401:
+            print(f"401 persistante pour la fenêtre {min_iso} -> {max_iso} après tentatives de rafraîchissement ; on passe à la fenêtre suivante")
+            break
 
-    all_jobs.extend(jobs)
+        if res.status_code not in (200, 206):
+            if res.status_code == 204:
+                break  # Pas d'offres dans cette fenêtre, passer à la suivante               
+            print(f"Réponse HTTP {res.status_code} pour la fenêtre {min_iso} -> {max_iso}")
+            break
 
-    content_range = res.getheader("Content-Range")
-    try:
-        total_jobs = int(content_range.split("/")[1])
+        try:
+            data_json = res.json()
+        except ValueError:
+            print("Impossible de parser la réponse JSON")
+            break
 
-    except (IndexError, ValueError, TypeError):
-        total_jobs = len(all_jobs)
+        jobs = data_json.get("resultats", [])
 
-    start += batch_size
+        if not jobs:
+            break
 
-    if start >= total_jobs:
-        break
+        all_jobs.extend(jobs)
 
-    time.sleep(0.5)  # Pour éviter de surcharger l'API
+        content_range = res.headers.get("Content-Range")
+        try:
+            total_jobs = int(content_range.split("/")[1]) if content_range else len(all_jobs)
+        except (IndexError, ValueError, TypeError):
+            total_jobs = len(all_jobs)
+
+        start += batch_size
+        if start >= total_jobs:
+            break
+
+        time.sleep(0.5)  # Pour éviter de surcharger l'API
+
+    # avancer à la fenêtre suivante
+    window_start = window_end
 
 # Sauvegarde dans un fichier JSON
-with open("out/offres_emploi.json", "w", encoding="utf-8") as f:
+os.makedirs("out", exist_ok=True)
+with open(f"out/offres_emploi_{typeContrat}.json", "w", encoding="utf-8") as f:
     json.dump(all_jobs, f, ensure_ascii=False, indent=4)
     print(f"Total des offres récupérées: {len(all_jobs)}")
-    print("Les résultats ont été sauvegardés dans 'offres_emploi.json'.")
+    print(f"Les résultats ont été sauvegardés dans 'out/offres_emploi_{typeContrat}.json'.")
