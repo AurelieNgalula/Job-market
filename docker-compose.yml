@@ -1,0 +1,70 @@
+services:
+  # =========================================================
+  # FastAPI Application
+  # =========================================================
+  app:
+    # Construction de l'image à partir du Dockerfile à la racine
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Nom du conteneur pour faciliter l'identification
+    container_name: job-market-app
+    # Commande exécutée au démarrage du conteneur
+    command: bash -c "cd script && uvicorn app:app --host 0.0.0.0 --port 8001 --reload"
+    # Exposition du port interne 8001 vers le port 8001 de l'hôte
+    ports:
+      - "8001:8001"
+    # Chargement des variables d'environnement depuis le fichier .env
+    env_file:
+      - .env
+    # Variables d'environnement additionnelles pour le conteneur
+    environment:
+      - PYTHONUNBUFFERED=1
+    # Montage des répertoires locaux dans le conteneur
+    volumes:
+      - ./script:/app/script
+      - ./script/out:/app/script/out
+    # Rejoindre le réseau défini dans ce fichier Compose
+    networks:
+      - job-market-network
+    # Redémarre automatiquement sauf si l'utilisateur arrête le conteneur
+    restart: unless-stopped
+
+  # =========================================================
+  # Worker (Pipeline de traitement)
+  # =========================================================
+  worker:
+    # Construction de l'image identique au service app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Nom du conteneur pour le worker
+    container_name: job-market-worker
+    # Commande routant le répertoire et exécutant les deux scripts successivement
+    command: bash -c "cd script && python3 requete.py && python3 recommand.py"
+    # Chargement des mêmes variables d'environnement que l'application
+    env_file:
+      - .env
+    # Variables d'environnement spécifiques au conteneur
+    environment:
+      - PYTHONUNBUFFERED=1
+    # Montage des sources et du dossier out pour réutiliser les fichiers JSON
+    volumes:
+      - ./script:/app/script
+      - ./script/out:/app/script/out
+    # Rejoindre le même réseau que l'application
+    networks:
+      - job-market-network
+    # Ce service n'est démarré que si le profil worker est activé
+    profiles:
+      - worker
+
+volumes:
+  # Volume nommé pour stocker les données persistantes PostgreSQL
+  postgres_data:
+    driver: local
+
+networks:
+  # Réseau en pont Docker qui permet aux services de communiquer
+  job-market-network:
+    driver: bridge

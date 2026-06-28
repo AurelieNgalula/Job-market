@@ -3,11 +3,14 @@ import unicodedata
 import os
 from datetime import datetime
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse, HTMLResponse
 
 from sqlalchemy import create_engine, text
 from sentence_transformers import SentenceTransformer
+
+load_dotenv()
 
 # =========================================================
 # APP FASTAPI
@@ -17,7 +20,10 @@ app = FastAPI()
 # =========================================================
 # DATABASE
 # =========================================================
-DB_POSTGRES_URL = "postgresql://neondb_owner:npg_VjS3d6XqHshB@ep-silent-forest-alx32mzu-pooler.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+DB_POSTGRES_URL = os.getenv("DB_POSTGRES_URL") or os.getenv(
+    "DATABASE_URL",
+    "postgresql://jobmarket:jobmarket_secure_password_123@postgres:5432/jobmarket_db"
+)
 engine = create_engine(DB_POSTGRES_URL)
 
 # =========================================================

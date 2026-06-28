@@ -1,10 +1,14 @@
+import glob
 import json
 import unicodedata
 import os
 from datetime import datetime
 
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sentence_transformers import SentenceTransformer
+
+load_dotenv()
 
 
 # =========================================================
@@ -12,7 +16,10 @@ from sentence_transformers import SentenceTransformer
 # =========================================================
 # Connexion PostgreSQL via SQLAlchemy
 # Utilisée pour stocker les embeddings et les offres
-DB_POSTGRES_URL = "postgresql://neondb_owner:npg_VjS3d6XqHshB@ep-silent-forest-alx32mzu-pooler.c-3.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+DB_POSTGRES_URL = os.getenv("DB_POSTGRES_URL") or os.getenv(
+    "DATABASE_URL",
+    "postgresql://jobmarket:jobmarket_secure_password_123@postgres:5432/jobmarket_db"
+)
 engine = create_engine(DB_POSTGRES_URL)
 
 
@@ -61,11 +68,18 @@ def parse_date(date_str):
 # =========================================================
 # Lit le fichier JSON contenant les offres d'emploi
 def load_jobs():
-    path = os.path.join(os.path.dirname(__file__), "out", "jobs.json")
-    
-    if not os.path.exists(path):
-        print("ERREUR: Fichier non trouve: " + path)
+    out_dir = os.path.join(os.path.dirname(__file__), "out")
+    if not os.path.isdir(out_dir):
+        print("ERREUR: Dossier out/ introuvable: " + out_dir)
         return None
+
+    json_files = sorted(glob.glob(os.path.join(out_dir, "*.json")))
+    if not json_files:
+        print("ERREUR: Aucun fichier JSON trouve dans out/")
+        return None
+
+    path = json_files[-1]
+    print("Chargement du fichier JSON: " + path)
 
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -287,48 +301,53 @@ def search(query):
 # - lance le pipeline d'ingestion
 # - permet ensuite de tester la recherche en boucle
 if __name__ == "__main__":
+    import sys
+
     print("=" * 60)
     print("JOB MARKET - Recherche Semantique d Emploi")
     print("=" * 60)
     
     run_pipeline(batch_size=64)
 
-    print("\nMode interactif - Tapez exit pour quitter\n")
-    
-    while True:
-        try:
-            q = input("Recherche (exit pour quitter): ").strip()
-            
-            if q.lower() == "exit":
-                print("Au revoir!")
-                break
-            
-            if not q:
-                print("Veuillez entrer une recherche\n")
-                continue
-
-            results = search(q)
-
-            if not results:
-                print("Aucun resultat trouve\n")
-                continue
-            
-            print("\nOK: " + str(len(results)) + " resultat(s) trouve(s):\n")
-            
-            for i, r in enumerate(results, 1):
-                print(str(i) + ". " + r["title"])
-                print("   Lieu: " + str(r.get("location", "Non specifie")))
-                
-                competences = r.get("competences")
-                if competences and isinstance(competences, list):
-                    print("   Competences: " + ", ".join(competences[:5]))
-                
-                score = r.get("score", 0)
-                print("   Score: " + str(round(score, 3)) + " (" + str(round(score*100, 1)) + "%)")
-                print("")
+    if sys.stdin.isatty():
+        print("\nMode interactif - Tapez exit pour quitter\n")
         
-        except KeyboardInterrupt:
-            print("\nArret...")
-            break
-        except Exception as e:
-            print("ERREUR: " + str(e) + "\n")
+        while True:
+            try:
+                q = input("Recherche (exit pour quitter): ").strip()
+                
+                if q.lower() == "exit":
+                    print("Au revoir!")
+                    break
+                
+                if not q:
+                    print("Veuillez entrer une recherche\n")
+                    continue
+
+                results = search(q)
+
+                if not results:
+                    print("Aucun resultat trouve\n")
+                    continue
+                
+                print("\nOK: " + str(len(results)) + " resultat(s) trouve(s):\n")
+                
+                for i, r in enumerate(results, 1):
+                    print(str(i) + ". " + r["title"])
+                    print("   Lieu: " + str(r.get("location", "Non specifie")))
+                    
+                    competences = r.get("competences")
+                    if competences and isinstance(competences, list):
+                        print("   Competences: " + ", ".join(competences[:5]))
+                    
+                    score = r.get("score", 0)
+                    print("   Score: " + str(round(score, 3)) + " (" + str(round(score*100, 1)) + "%)")
+                    print("")
+            
+            except KeyboardInterrupt:
+                print("\nArret...")
+                break
+            except Exception as e:
+                print("ERREUR: " + str(e) + "\n")
+    else:
+        print("Pas de terminal interactif : fin du process.")

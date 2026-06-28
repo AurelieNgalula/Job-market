@@ -1,202 +1,176 @@
 # Job-market
 
-Un projet Python pour récupérer les offres d'emploi via l'API France Travail et les exporter en JSON ou CSV.
+Ce projet Git contient une application Python qui récupère des offres d'emploi via l'API France Travail, stocke les résultats en JSON et permet une recherche sémantique via embeddings.
 
-## Vue d'ensemble
+## Tableau de bord Git
 
-Ce projet scrape les offres d'emploi depuis l'API publique de [France Travail](https://www.francetravail.fr/). Les offres sont récupérées par fenêtres temporelles, paginées et sauvegardées en JSON. 
+Ce dépôt est conçu comme un projet Git standard :
+- Cloner le dépôt depuis GitHub
+- Installer les dépendances
+- Lancer les scripts localement ou via Docker
+- Versionner les modifications dans des branches dédiées
 
+Une nouvelle personne peut démarrer rapidement en clonant le repo, en configurant ses variables d'environnement, puis en utilisant Docker ou la CLI Python.
 
-### Fonctionnalités principales
-- **Récupération par fenêtres temporelles** : divise la période de recherche en petites fenêtres (ex: 12h) pour gérer les limites de pagination de l'API
-- **Gestion de token OAuth2** : rafraîchissement automatique du token en cas d'expiration (401)
-- **Gestion des erreurs réseau** : retry avec backoff exponentiel
-- **Sauvegarde en JSON** : l'API retourne du JSON, sauvegardé directement dans `out/offres_emploi_{typeContrat}.json`
-
-## Architecture
+## Architecture du projet
 
 ```
 Job-market/
 ├── script/
-│   ├── offers_fetcher.py    # Script principal : récupère les offres via API France Travail
-│   ├── requete.py           # Script alternatif avec gestion de réauthentification
-│   ├── utils.py             # Utilitaires : authentification OAuth2
-│   ├── requirements.txt      # Dépendances Python
-│   └── __pycache__/
-├── out/                      # Dossier de sortie (créé automatiquement)
-│   ├── offres_emploi_cdi.json
-│   ├── offres_emploi_cdd.json
-│   └── ...
-├── .env                      # Variables d'environnement (CLIENT_ID, CLIENT_SECRET)
-├── .venv/                    # Environnement virtuel Python
-└── README.md                 # Ce fichier
+│   ├── app.py             # FastAPI application
+│   ├── recommand.py       # Pipeline d'indexation et recherche sémantique
+│   ├── requete.py         # Script de requête API France Travail
+│   ├── utils.py           # Utilitaires OAuth2 et requêtes
+│   ├── requirements.txt   # Dépendances Python
+│   └── out/               # Dossier de sortie des données
+├── Dockerfile
+├── docker-compose.yml
+├── README.md
+├── DOCKER_README.md
+└── .gitignore
 ```
 
 ## Prérequis
 
-- Python 3.14.3+ (compilé avec OpenSSL 3.6.1+)
-- Authentifiants France Travail (CLIENT_ID et CLIENT_SECRET)
-- pip 26.0+ (gestionnaire de paquets Python)
-- Homebrew (sur macOS)
+- Git
+- Docker Engine 20.10+
+- Docker Compose 2.0+
+- Python 3.14+ (optionnel si vous n'utilisez pas Docker)
+- Identifiants France Travail : `CLIENT_ID` et `CLIENT_SECRET`
 
-### Vérifier la version de Python et OpenSSL
+## Démarrage rapide (Git + Docker)
 
-```bash
-python3 --version
-python3 -c "import ssl; print('OpenSSL:', ssl.OPENSSL_VERSION)"
-```
-
-**Versioning actuelle** :
-- Python 3.14.3
-- OpenSSL 3.6.1 (27 Jan 2026)
-
-## Installation
-
-### 1. Cloner le projet
+### 1. Cloner le dépôt
 
 ```bash
-cd /Users/yaoyao/Desktop
 git clone <url_du_repo> Job-market
 cd Job-market
 ```
 
-### 2. Créer un environnement virtuel Python
+### 2. Construire et démarrer avec Docker Compose
+
+```bash
+docker compose up --build
+```
+
+Cette commande lance :
+- `postgres` (PostgreSQL + pgvector)
+- `app` (FastAPI)
+
+Pour démarrer aussi le worker de traitement :
+
+```bash
+docker compose up --build --profile worker
+```
+
+### 3. Vérifier l’état des services
+
+```bash
+docker compose ps
+```
+
+### 4. Accéder à l’API
+
+- Service FastAPI : `http://localhost:8001`
+- Documentation Swagger : `http://localhost:8001/docs`
+
+## Lancer sans Docker
+
+### 1. Installer les dépendances
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate   # macOS/Linux
-# ou sur Windows:
-# .venv\Scripts\activate
-```
-
-### 3. Installer les dépendances
-
-```bash
+source .venv/bin/activate
 pip install --upgrade pip
 pip install -r script/requirements.txt
 ```
 
-### 4. Configurer les authentifiants
+### 2. Configurer les identifiants
 
-Créez un fichier `.env` à la racine du projet avec vos identifiants France Travail :
+Créer un fichier `.env` à la racine :
 
 ```env
 CLIENT_ID=votre_client_id
 CLIENT_SECRET=votre_client_secret
 ```
 
-**Obtenir vos identifiants** :
-1. Accédez à [France Travail API](https://www.francetravail.fr/partenaire/nos-api)
-2. Inscrivez-vous ou connectez-vous
-3. Créez une application et récupérez CLIENT_ID et CLIENT_SECRET
+### 3. Récupérer les offres
 
-## Utilisation
-
-### 1️⃣ Récupérer les offres depuis l'API (JSON)
-
-**L'API France Travail retourne du JSON.** Ce script récupère les offres et les sauvegarde directement en JSON.
-
-#### Utilisation simple :
 ```bash
 cd script
-python3 offers_fetcher.py
+python3 requete.py
 ```
 
-**Résultat** : `out/offres_emploi_cdi.json` (format JSON natif de l'API)
+### 4. Lancer le worker / indexation
 
-#### Options en ligne de commande :
 ```bash
-python3 offers_fetcher.py --window-days 1 --batch-size 150 --dedupe --out out/offres_emploi_cdi.json
+cd script
+python3 recommand.py
 ```
 
-**Options disponibles** :
-- `--window-days` : taille de la fenêtre temporelle en jours (défaut: 0.05 = ~1h à 2h)
-- `--batch-size` : nombre d'offres par page (défaut: 150)
-- `--dedupe` : activer la déduplication des offres par ID ou empreinte
-- `--out` : chemin du fichier de sortie (défaut: `out/offres_emploi_cdi.json`)
-- `--start` : date de début au format ISO ou YYYY-MM-DD (défaut: now - 90 jours)
-- `--end` : date de fin au format ISO ou YYYY-MM-DD (défaut: now)
+## Utilisation du Dockerfile
 
-#### Exemple avec filtrage sur une période spécifique :
+### Construire l’image
+
 ```bash
-python3 offers_fetcher.py --start 2026-01-01 --end 2026-02-01 --out out/offres_jan_fev.json
+docker build -t job-market:latest .
 ```
 
-## Scripts détails
+### Lancer l’application FastAPI
 
-### `script/offers_fetcher.py`
+```bash
+docker run --rm -p 8001:8001 \
+  -e DATABASE_URL=postgresql://jobmarket:jobmarket_secure_password_123@postgres:5432/jobmarket_db \
+  -v "$(pwd)/script:/app/script" \
+  -v "$(pwd)/script/out:/app/script/out" \
+  job-market:latest
+```
 
-**Fonction principale** : `fetch_offers()` - récupère les offres depuis l'API France Travail
+### Lancer le worker
 
-**Flux** :
-1. Obtient un token OAuth2 via `get_access_token()` (utils.py)
-2. Boucle sur des fenêtres temporelles (ex: 90 jours divisé en fenêtres de 12h par défaut)
-3. Pour chaque fenêtre, pagine par lots de 150 offres
-4. Gère les erreurs réseau avec retry
-5. Sauvegarde toutes les offres en JSON
+```bash
+docker run --rm \
+  -e DATABASE_URL=postgresql://jobmarket:jobmarket_secure_password_123@postgres:5432/jobmarket_db \
+  -v "$(pwd)/script:/app/script" \
+  -v "$(pwd)/script/out:/app/script/out" \
+  job-market:latest \
+  bash -c "cd script && python3 recommand.py"
+```
 
-**Gestion des statuts HTTP** :
-- **200** : succès, affiche le nombre d'offres récupérées
-- **206** : contenu partiel (pagination)
-- **204** : pas de contenu pour cette fenêtre
-- **401, 400, etc.** : erreur, passe à la fenêtre suivante
-
-**Déduplication** : Si `--dedupe` est activé, le script tente de dédupliquer les offres par :
-- Identifiant d'offre (id, offreId, identifiant, reference)
-- Empreinte JSON si pas d'ID
+## Structure des scripts
 
 ### `script/requete.py`
 
-**Alternative à `offers_fetcher.py`** : script modulable avec gestion fine de réauthentification
+- Envoie des requêtes vers l’API France Travail
+- Gère les fenêtres temporelles et la pagination
+- Sauvegarde les offres récupérées dans `script/out`
 
-**Différences principales** :
-- Gère explicitement les erreurs 401 avec tentatives de rafraîchissement du token
-- Plus facile à adapter pour des besoins personnalisés
-- Variables de configuration directement dans le script (modifiables)
+### `script/recommand.py`
 
-**Configuration** :
-- `GLOBAL_MIN_CREATION_DT` : date minimale de création (par défaut: now - 30 jours)
-- `GLOBAL_MAX_CREATION_DT` : date maximale de création (par défaut: now - 0.5 jours)
-- `window_days` : taille des fenêtres temporelles (défaut: 0.05 = ~1h)
-- `typeContrat` : type de contrat à récupérer ("CDI", "CDD", etc.)
+- Charge les données JSON
+- Calcule des embeddings avec `SentenceTransformer`
+- Enregistre les vecteurs dans PostgreSQL via `pgvector`
+- Propose une recherche sémantique interactive
 
-### `script/utils.py`
+## Git Workflows recommandés
 
-**Fonction principale** : `get_access_token()`
-
-Récupère un token d'accès OAuth2 depuis France Travail en utilisant le Client Credentials Flow.
-
-**Détails** :
-- Charge CLIENT_ID et CLIENT_SECRET depuis le fichier `.env`
-- URL d'authentification : `https://entreprise.francetravail.fr/connexion/oauth2/access_token`
-- Scopes requis : `o2dsoffre api_offresdemploiv2`
-- Token valide environ 3600 secondes (~1 heure)
-
-## Mettre à jour Python
-
-Si vous voyez un warning `urllib3 v2 only supports OpenSSL 1.1.1+` ou si vous avez `LibreSSL` au lieu d'`OpenSSL`, mettez à jour Python.
-
-### Sur macOS (recommandé avec Homebrew)
-
-#### 1️⃣ Installer Homebrew (si pas encore installé)
-
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+- Créer une branche pour chaque fonctionnalité ou correction :
+  ```bash
+git checkout -b feature/ma-fonctionnalite
 ```
-
-Puis configurer le PATH dans votre shell :
-```bash
-echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
-eval "$(/opt/homebrew/bin/brew shellenv)"
+- Ajouter, committer et pousser :
+  ```bash
+git add .
+git commit -m "Ajout de la doc Docker"
+git push origin feature/ma-fonctionnalite
 ```
+- Ouvrir une Pull Request pour revue
 
-#### 2️⃣ Installer/Mettre à jour Python
+## Notes
 
-```bash
-brew install python
-```
-
-Cela installera Python 3.14.3+ avec OpenSSL 3.6.1+.
+- Le `docker-compose.yml` inclut un service `worker` avec le profil `worker`.
+- Le service `app` dépend de `postgres` et expose le port `8001`.
+- Le dossier `script/out` est monté en volume pour partager les données avec les containers.
 
 #### 3️⃣ Recréer l'environnement virtuel
 

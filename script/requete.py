@@ -8,13 +8,13 @@ import os
 # Créer les headers d'authentification
 headers = _make_headers()
 
-# bornes globales (datetime objects)
-GLOBAL_MIN_CREATION_DT = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1.5)
-GLOBAL_MAX_CREATION_DT = datetime.datetime.now(datetime.timezone.utc)- datetime.timedelta(days=0.5)
+# bornes globales (datetime objects) pour les 24 dernières heures
+GLOBAL_MAX_CREATION_DT = datetime.datetime.now(datetime.timezone.utc)
+GLOBAL_MIN_CREATION_DT = GLOBAL_MAX_CREATION_DT - datetime.timedelta(hours=24)
 
-print(f"Récupération des offres créées entre {GLOBAL_MIN_CREATION_DT.isoformat()} et {GLOBAL_MAX_CREATION_DT.isoformat()}")
+print(f"Récupération des offres créées entre {GLOBAL_MIN_CREATION_DT.isoformat()} et {GLOBAL_MAX_CREATION_DT.isoformat()} (24 dernières heures)")
 # configuration : taille de la fenêtre en jours (modifiable)
-window_days = 0.05  # 12 heures, change to 1 for travailler par jours
+window_days = 0.05  # 12 heures, change to 1 pour travailler par jours
 
 typeContrat = "CDI" # ou "CDI"
 
@@ -93,7 +93,9 @@ while window_start < GLOBAL_MAX_CREATION_DT:
 
 # Sauvegarde dans un fichier JSON
 os.makedirs("out", exist_ok=True)
-with open(f"out/offres_emploi_{typeContrat}.json", "w", encoding="utf-8") as f:
+date_prefix = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d")
+output_path = f"out/{date_prefix}_offres_emploi.json"
+with open(output_path, "w", encoding="utf-8") as f:
     json.dump(all_jobs, f, ensure_ascii=False, indent=4)
     print(f"Total des offres récupérées: {len(all_jobs)}")
-    print(f"Les résultats ont été sauvegardés dans 'out/offres_emploi_{typeContrat}.json'.")
+    print(f"Les résultats ont été sauvegardés dans '{output_path}'.")
