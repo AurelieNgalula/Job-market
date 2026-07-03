@@ -72,7 +72,7 @@ job-market-worker   Up (si profil activé)
 ### Base PostgreSQL
 Le projet se connecte à une base PostgreSQL via les variables `DB_POSTGRES_URL` et `DATABASE_URL`.
 
-Exemple avec une base distante :
+Exemple avec une base distante (ICI : NEONDB):
 ```env
 DB_POSTGRES_URL=postgresql://user:password@host:5432/dbname?sslmode=require
 DATABASE_URL=postgresql://user:password@host:5432/dbname?sslmode=require
@@ -91,7 +91,14 @@ Lancer le worker :
 ```bash
 docker compose --profile worker up worker
 ```
-
+dans le cas où le code change 
+```bash
+docker compose --profile worker up --build worker
+```
+reste complet 
+```bash
+docker compose down
+```
 ---
 
 ## Commandes utiles
@@ -188,145 +195,4 @@ docker compose up -d app
 ### 3. Lancer le worker
 ```bash
 docker compose --profile worker up worker
-```
 
----
-
-## Projet Git
-
-- Cloner le repo : `git clone <url_du_repo> Job-market`
-- Créer une branche pour chaque fonctionnalité :
-```bash
-git checkout -b feature/ma-fonctionnalite
-```
-- Committer :
-```bash
-git add .
-git commit -m "Description du changement"
-```
-- Pousser :
-```bash
-git push origin feature/ma-fonctionnalite
-```
-- Ouvrir une Pull Request pour revue
-
-- Lire `script/out/offres_emploi.json`
-- Creer les embeddings
-- Remplir la table `jobs_embeddings`
-
-### 4. Demarrer l app
-```bash
-docker-compose up -d app
-```
-
-### 5. Tester l app
-```bash
-curl http://localhost:8001/search?q=python
-```
-
----
-
-## Production
-
-Pour un deploiement production:
-
-### 1. Modifier docker-compose.yml
-```yaml
-app:
-  command: bash -c "cd script && uvicorn app:app --host 0.0.0.0 --port 8001 --workers 4"
-```
-
-### 2. Utiliser un .env securise
-```bash
-docker-compose --env-file .env.prod up -d
-```
-
-### 3. Configurer un reverse proxy (nginx)
-```bash
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-```
-
-### 4. Configuration SSL/TLS
-- Utiliser Traefik ou nginx
-- Certificats Let's Encrypt
-
----
-
-## Troubleshooting
-
-### Erreur: "Address already in use"
-```bash
-# Changer le port dans docker-compose.yml
-ports:
-  - "8002:8001"  # Utiliser 8002 a la place de 8001
-```
-
-### Erreur: "Cannot connect to PostgreSQL"
-```bash
-# Verifier que postgres est pret
-docker-compose logs postgres
-
-# Relancer postgres
-docker-compose restart postgres
-```
-
-### Erreur: "Module not found"
-```bash
-# Reconstruire l image
-docker-compose build --no-cache
-docker-compose up
-```
-
-### Donnees perdues apres down
-Les donnees PostgreSQL sont stockees dans `postgres_data` volume. Pour les conserver:
-```bash
-docker-compose down  # Ne pas utiliser -v
-```
-
-### Voir la consommation de ressources
-```bash
-docker stats job-market-postgres job-market-app
-```
-
----
-
-## Fichiers
-
-```
-.
-├── docker-compose.yml      # Configuration des services
-├── Dockerfile              # Image Docker de l app
-├── .dockerignore           # Fichiers a ignorer
-├── .env.example            # Template variables d env
-├── script/
-│   ├── app.py              # FastAPI app
-│   ├── recommand.py        # Pipeline worker
-│   ├── requirements.txt    # Dependances Python
-│   └── out/                # Donnees JSON
-└── docker-README.md        # Ce fichier
-```
-
----
-
-## Performance
-
-- **PostgreSQL**: Optimise pour pgvector
-- **FastAPI**: Mode production avec workers
-- **RAM requis**: ~2GB minimum
-- **Stockage**: ~500MB pour donnees + volumes
-
----
-
-## Support
-
-Pour plus d aide:
-- Docker Compose: https://docs.docker.com/compose/
-- PostgreSQL: https://www.postgresql.org/docs/
-- pgvector: https://github.com/pgvector/pgvector
-- FastAPI: https://fastapi.tiangolo.com/
-
----
-
-## License
-
-Job-market (2026)

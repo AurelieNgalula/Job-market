@@ -2,7 +2,7 @@
 
 ## Description
 
-Application FastAPI pour la recherche semantique d offres d emploi avec embeddings vectoriels et pgvector.
+Application FastAPI pour la recherche semantique d'offres d emploi avec embeddings vectoriels et pgvector.
 
 ### Fonctionnalites:
 - Recherche semantique intelligente d offres d emploi
@@ -16,7 +16,7 @@ Application FastAPI pour la recherche semantique d offres d emploi avec embeddin
 
 ## Prerequis
 
-### 1. Python 3.14+
+### 1. Python 3.11+
 ```bash
 python3 --version
 ```
@@ -28,11 +28,11 @@ source .venv/bin/activate
 
 ### 3. Dependances Installes
 ```bash
-pip install -r script/requirements.txt
+pip install -r backend/requirements.txt
 ```
 
 ### 4. Donnees d Emploi
-Le fichier `script/out/offres_emploi.json` doit exister. Si absent, executer d abord:
+Le fichier `backend/data/YYYYMMDD_offres_emploi.json` doit exister. Si absent, executer d abord:
 ```bash
 python3 script/recommand.py
 ```
@@ -46,24 +46,23 @@ python3 script/recommand.py
 
 ## Lancer l Application
 
-### Option 1: Depuis le repertoire script (Recommande)
+### Option 1: Depuis le repertoire backend (Recommande)
 ```bash
-cd /Users/yaoyao/Desktop/Job-market/script
+cd /backend
 source ../../.venv/bin/activate
 uvicorn app:app --reload --host 127.0.0.1 --port 8001
 ```
 
 ### Option 2: Commande complete depuis racine
 ```bash
-cd /Users/yaoyao/Desktop/Job-market
 source .venv/bin/activate
-cd script
+cd backend
 uvicorn app:app --reload --host 127.0.0.1 --port 8001
 ```
 
 ### Option 3: One-liner
 ```bash
-cd /Users/yaoyao/Desktop/Job-market && source .venv/bin/activate && cd script && uvicorn app:app --reload --host 127.0.0.1 --port 8001
+source .venv/bin/activate && cd backend && uvicorn app:app --reload --host 127.0.0.1 --port 8001
 ```
 
 ---
@@ -77,13 +76,15 @@ Une fois demarree, l application est disponible sur:
 - **Description**: Interface utilisateur avec recherche et resultats
 
 ### API REST
-- **Recherche**: http://127.0.0.1:8001/search?q=python
-- **Parametres**: 
   - `q` ou `query`: terme de recherche
+- **Recherche**: http://localhost:8001/search?query=python
+- **Parametres**: 
+  - `query`: terme de recherche
+  - `location`: lieu de travail
   - `limit`: nombre de resultats (defaut: 10)
 
 ### Documentation API
-- **Swagger UI**: http://127.0.0.1:8001/docs
+- **Swagger UI**: http://localhost.0.0.1:8001/docs
 - **ReDoc**: http://127.0.0.1:8001/redoc
 
 ---
@@ -91,11 +92,12 @@ Une fois demarree, l application est disponible sur:
 ## Utilisation
 
 ### Recherche Simple
-1. Ouvrir http://127.0.0.1:8001
+1. Ouvrir http://localhost:8001
 2. Taper votre recherche (ex: "python", "data scientist", "infirmier")
 3. Cliquer "Chercher"
 4. Les resultats affichent:
    - Titre du poste
+   - Date d'actualisation
    - Lieu de travail
    - Competences requises
    - Score de similarite (%)
@@ -108,15 +110,15 @@ Une fois demarree, l application est disponible sur:
 
 ### API via curl
 ```bash
-curl "http://127.0.0.1:8001/search?q=python&limit=5"
+curl "http://localhost:8001/search?query=python&limit=5"
 ```
 
 ### API via Python
 ```python
 import requests
 
-response = requests.get("http://127.0.0.1:8001/search", params={
-    "q": "python",
+response = requests.get("http://localhost:8001/search", params={
+    "query": "python",
     "limit": 5
 })
 results = response.json()
@@ -134,6 +136,7 @@ Chaque resultat contient:
   "title": "Developpeur Python Senior",
   "location": "Paris, Ile-de-France",
   "competences": ["python", "django", "sql", "docker"],
+  "date_actualisation":"2026-01-15T02:31:45"
   "score": 0.845
 }
 ```
@@ -189,20 +192,6 @@ Appuyer sur `Ctrl+C` dans le terminal pour arreter le serveur.
 - Embeddings: Modele all-MiniLM-L6-v2 (384 dimensions)
 - Base de donnees: PostgreSQL + pgvector
 
----
-
-## Fichiers Importants
-
-```
-script/
-├── app.py                 # Application FastAPI principale
-├── recommand.py          # Pipeline de traitement des donnees
-├── requirements.txt      # Dependances Python
-└── out/
-    └── offres_emploi.json # Donnees d offres d emploi
-```
-
----
 
 ## Configuration
 
