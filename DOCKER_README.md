@@ -3,9 +3,9 @@
 ## Description
 
 Ce projet Git est livré avec une configuration Docker Compose pour lancer l'application Job-market :
-- PostgreSQL 15 avec extension `pgvector`
 - Application FastAPI
 - Worker de traitement des données
+- Connexion à une base PostgreSQL distante ou locale via variables d’environnement
 
 Il est pensé pour un nouveau contributeur qui veut cloner le repo et démarrer directement avec Docker.
 
@@ -55,9 +55,9 @@ docker compose ps
 
 Vous devriez voir :
 ```
-NAME                        STATUS
-job-market-postgres         Up (healthy)
-job-market-app              Up
+NAME                STATUS
+job-market-app      Up
+job-market-worker   Up (si profil activé)
 ```
 
 ### 4. Accéder à l'application
@@ -69,16 +69,13 @@ job-market-app              Up
 
 ## Services
 
-### PostgreSQL
-- **Port** : 5432
-- **Utilisateur** : jobmarket
-- **Mot de passe** : jobmarket_secure_password_123
-- **Base de données** : jobmarket_db
-- **Extension** : pgvector
+### Base PostgreSQL
+Le projet se connecte à une base PostgreSQL via les variables `DB_POSTGRES_URL` et `DATABASE_URL`.
 
-Se connecter à la base :
-```bash
-docker compose exec postgres psql -U jobmarket -d jobmarket_db
+Exemple avec une base distante :
+```env
+DB_POSTGRES_URL=postgresql://user:password@host:5432/dbname?sslmode=require
+DATABASE_URL=postgresql://user:password@host:5432/dbname?sslmode=require
 ```
 
 ### FastAPI Application
@@ -88,7 +85,7 @@ docker compose exec postgres psql -U jobmarket -d jobmarket_db
 
 ### Worker (Pipeline)
 - **Profile** : worker
-- **Fonction** : traite les données et crée les embeddings
+- **Fonction** : récupère les offres et crée les embeddings
 
 Lancer le worker :
 ```bash
@@ -116,7 +113,7 @@ docker compose logs -f
 
 # Service spécifique
 docker compose logs -f app
-docker compose logs -f postgres
+docker compose logs -f worker
 ```
 
 ### Entrer dans un container
@@ -124,8 +121,8 @@ docker compose logs -f postgres
 # Application
 docker compose exec app bash
 
-# PostgreSQL
-docker compose exec postgres bash
+# Worker
+docker compose exec worker bash
 ```
 
 ### Relancer un service
@@ -164,7 +161,8 @@ docker compose --env-file .env up
 
 Exemple :
 ```env
-DATABASE_URL=postgresql://jobmarket:jobmarket_secure_password_123@postgres:5432/jobmarket_db
+DATABASE_URL=postgresql://user:password@host:5432/dbname?sslmode=require
+DB_POSTGRES_URL=postgresql://user:password@host:5432/dbname?sslmode=require
 ```
 
 ### Ports
@@ -179,14 +177,12 @@ ports:
 
 ## Pipeline de données
 
-### 1. Lancer PostgreSQL
-```bash
-docker compose up -d postgres
-```
+### 1. Vérifier la configuration de la base
+Assurez-vous d’avoir défini `DB_POSTGRES_URL` et/ou `DATABASE_URL` dans votre fichier `.env`.
 
-### 2. Attendre que PostgreSQL soit prêt
+### 2. Démarrer l’application
 ```bash
-docker compose ps
+docker compose up -d app
 ```
 
 ### 3. Lancer le worker

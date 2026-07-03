@@ -10,7 +10,7 @@ services:
     # Nom du conteneur pour faciliter l'identification
     container_name: job-market-app
     # Commande exécutée au démarrage du conteneur
-    command: bash -c "cd script && uvicorn app:app --host 0.0.0.0 --port 8001 --reload"
+    command: uvicorn backend.app:app --host 0.0.0.0 --port 8001 --reload
     # Exposition du port interne 8001 vers le port 8001 de l'hôte
     ports:
       - "8001:8001"
@@ -19,11 +19,11 @@ services:
       - .env
     # Variables d'environnement additionnelles pour le conteneur
     environment:
-      - PYTHONUNBUFFERED=1
+      - DB_POSTGRES_URL=${DB_POSTGRES_URL:-postgresql://jobmarket:jobmarket_secure_password_123@postgres:5432/jobmarket_db}
     # Montage des répertoires locaux dans le conteneur
     volumes:
-      - ./script:/app/script
-      - ./script/out:/app/script/out
+      - ./backend:/app/backend
+      - ./data:/app/data
     # Rejoindre le réseau défini dans ce fichier Compose
     networks:
       - job-market-network
@@ -41,17 +41,17 @@ services:
     # Nom du conteneur pour le worker
     container_name: job-market-worker
     # Commande routant le répertoire et exécutant les deux scripts successivement
-    command: bash -c "cd script && python3 requete.py && python3 recommand.py"
+    command: bash -c "cd backend && python3 fetch_jobs.py && sleep 1 && python3 job_indexer.py"
     # Chargement des mêmes variables d'environnement que l'application
     env_file:
       - .env
     # Variables d'environnement spécifiques au conteneur
     environment:
-      - PYTHONUNBUFFERED=1
-    # Montage des sources et du dossier out pour réutiliser les fichiers JSON
+      - DB_POSTGRES_URL=${DB_POSTGRES_URL:-postgresql://jobmarket:jobmarket_secure_password_123@postgres:5432/jobmarket_db}
+    # Montage des sources et du dossier data pour réutiliser les fichiers JSON
     volumes:
-      - ./script:/app/script
-      - ./script/out:/app/script/out
+      - ./backend:/app/backend
+      - ./data:/app/data
     # Rejoindre le même réseau que l'application
     networks:
       - job-market-network
@@ -59,10 +59,6 @@ services:
     profiles:
       - worker
 
-volumes:
-  # Volume nommé pour stocker les données persistantes PostgreSQL
-  postgres_data:
-    driver: local
 
 networks:
   # Réseau en pont Docker qui permet aux services de communiquer

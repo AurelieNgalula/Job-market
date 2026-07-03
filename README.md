@@ -1,6 +1,6 @@
 # Job-market
 
-Ce projet Git contient une application Python qui récupère des offres d'emploi via l'API France Travail, stocke les résultats en JSON et permet une recherche sémantique via embeddings.
+Ce projet Git contient une application Python qui récupère des offres d'emploi via l'API France Travail, stocke les résultats en JSON et permet une recherche sémantique via embeddings dans une base PostgreSQL.
 
 ## Tableau de bord Git
 
@@ -16,17 +16,19 @@ Une nouvelle personne peut démarrer rapidement en clonant le repo, en configura
 
 ```
 Job-market/
-├── script/
-│   ├── app.py             # FastAPI application
-│   ├── recommand.py       # Pipeline d'indexation et recherche sémantique
-│   ├── requete.py         # Script de requête API France Travail
-│   ├── utils.py           # Utilitaires OAuth2 et requêtes
-│   ├── requirements.txt   # Dépendances Python
-│   └── out/               # Dossier de sortie des données
+├── backend/
+│   ├── app.py              # API FastAPI + interface web
+│   ├── fetch_jobs.py       # Récupération des offres France Travail
+│   ├── job_indexer.py      # Pipeline d'indexation et embeddings
+│   ├── utils.py            # Utilitaires OAuth2 et parsing
+│   ├── requirements.txt    # Dépendances Python
+│   └── templates/          # Interface HTML
+├── data/                   # Données JSON utilisées pour l'indexation
 ├── Dockerfile
 ├── docker-compose.yml
 ├── README.md
 ├── DOCKER_README.md
+├── .env.example
 └── .gitignore
 ```
 
@@ -54,8 +56,8 @@ docker compose up --build
 ```
 
 Cette commande lance :
-- `postgres` (PostgreSQL + pgvector)
 - `app` (FastAPI)
+- `worker` (optionnel, pour l’indexation)
 
 Pour démarrer aussi le worker de traitement :
 
@@ -92,20 +94,22 @@ Créer un fichier `.env` à la racine :
 ```env
 CLIENT_ID=votre_client_id
 CLIENT_SECRET=votre_client_secret
+DATABASE_URL=postgresql://user:password@host:5432/dbname?sslmode=require
+DB_POSTGRES_URL=postgresql://user:password@host:5432/dbname?sslmode=require
 ```
 
 ### 3. Récupérer les offres
 
 ```bash
-cd script
-python3 requete.py
+cd backend
+python3 fetch_jobs.py
 ```
 
 ### 4. Lancer le worker / indexation
 
 ```bash
-cd script
-python3 recommand.py
+cd backend
+python3 job_indexer.py
 ```
 
 ## Utilisation du Dockerfile
@@ -120,9 +124,9 @@ docker build -t job-market:latest .
 
 ```bash
 docker run --rm -p 8001:8001 \
-  -e DATABASE_URL=postgresql://jobmarket:jobmarket_secure_password_123@postgres:5432/jobmarket_db \
-  -v "$(pwd)/script:/app/script" \
-  -v "$(pwd)/script/out:/app/script/out" \
+  -e DATABASE_URL=postgresql://user:password@host:5432/dbname?sslmode=require \
+  -v "$(pwd)/backend:/app/backend" \
+  -v "$(pwd)/data:/app/data" \
   job-market:latest
 ```
 
@@ -130,22 +134,22 @@ docker run --rm -p 8001:8001 \
 
 ```bash
 docker run --rm \
-  -e DATABASE_URL=postgresql://jobmarket:jobmarket_secure_password_123@postgres:5432/jobmarket_db \
-  -v "$(pwd)/script:/app/script" \
-  -v "$(pwd)/script/out:/app/script/out" \
+  -e DATABASE_URL=postgresql://user:password@host:5432/dbname?sslmode=require \
+  -v "$(pwd)/backend:/app/backend" \
+  -v "$(pwd)/data:/app/data" \
   job-market:latest \
-  bash -c "cd script && python3 recommand.py"
+  bash -c "cd backend && python3 job_indexer.py"
 ```
 
 ## Structure des scripts
 
-### `script/requete.py`
+### `backend/fetch_jobs.py`
 
 - Envoie des requêtes vers l’API France Travail
 - Gère les fenêtres temporelles et la pagination
-- Sauvegarde les offres récupérées dans `script/out`
+- Sauvegarde les offres récupérées dans `data/`
 
-### `script/recommand.py`
+### `backend/job_indexer.py`
 
 - Charge les données JSON
 - Calcule des embeddings avec `SentenceTransformer`
@@ -169,8 +173,8 @@ git push origin feature/ma-fonctionnalite
 ## Notes
 
 - Le `docker-compose.yml` inclut un service `worker` avec le profil `worker`.
-- Le service `app` dépend de `postgres` et expose le port `8001`.
-- Le dossier `script/out` est monté en volume pour partager les données avec les containers.
+- Le service `app` expose le port `8001`.
+- Les dossiers `backend` et `data` sont montés en volume pour partager les sources avec les containers.
 
 #### 3️⃣ Recréer l'environnement virtuel
 
