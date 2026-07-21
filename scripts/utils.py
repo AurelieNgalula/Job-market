@@ -12,24 +12,15 @@ import time
 import os
 from datetime import datetime
 from typing import Optional
-try:
-    from dotenv import load_dotenv
-except ImportError:  # pragma: no cover
-    from dotenv import dotenv_values
 
-    def load_dotenv(*args, **kwargs):
-        return dotenv_values(*args, **kwargs)
-
-load_dotenv()
 
 # =========================================================
 # CONFIGURATION OAUTH2
 # =========================================================
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
-TOKEN_URL = "https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire"
-SCOPES = "o2dsoffre api_offresdemploiv2"
-
+TOKEN_URL = os.getenv("TOKEN_URL") 
+SCOPES = os.getenv("SCOPES")
 
 # =========================================================
 # TEXT CLEANING

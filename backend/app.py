@@ -10,7 +10,14 @@ import json
 import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover
+    from dotenv import dotenv_values
+
+    def load_dotenv(*args, **kwargs):
+        return dotenv_values(*args, **kwargs)
+
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, HTMLResponse
 from sqlalchemy import create_engine, text
@@ -36,9 +43,13 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 DB_POSTGRES_URL = (
     os.getenv("DB_POSTGRES_URL")
     or os.getenv("DATABASE_URL")
-    or "postgresql://jobmarket:jobmarket_secure_password_123@postgres:5432/jobmarket_db"
 )
-engine = create_engine(DB_POSTGRES_URL)
+
+if not DB_POSTGRES_URL:
+    raise ValueError("DB_POSTGRES_URL is not set in environment variables.")    
+
+engine = create_engine(DB_POSTGRES_URL, pool_pre_ping=True)
+# pool_pre_ping=True tester une connexion avant de l'utiliser, pour éviter les erreurs de connexion expirée.
 
 # =========================================================
 # MODEL (lazy loading)
@@ -58,7 +69,7 @@ def ensure_table_exists():
     with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
         conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS jobs_embeddings (
+            CREATE TABLE IF NOT EXISTS base_embedding (
                 id TEXT PRIMARY KEY,
                 title TEXT,
                 text TEXT,
@@ -81,7 +92,7 @@ def search_stream(query, location=None, limit=10):
     sql = """
         SELECT id, title, location, competences, date_actualisation,
                1 - (embedding <=> CAST(:v AS vector)) AS score
-        FROM jobs_embeddings
+        FROM base_embedding
 
     """
 

@@ -9,11 +9,8 @@ import os
 from datetime import datetime
 from sqlalchemy import create_engine, text
 from sentence_transformers import SentenceTransformer
-from dotenv import load_dotenv
-
 from utils import clean_text, parse_date, build_text, extract_competences, extract_location
-
-load_dotenv()
+import shutil
 
 # =========================================================
 # DATABASE
@@ -37,19 +34,21 @@ def get_model():
         _model = SentenceTransformer("all-MiniLM-L6-v2")
     return _model
 
+# paraphrase-multilingual-MiniLM-L12-v2
 
 # =========================================================
 # CHARGEMENT DES DONNEES
 # =========================================================
 def load_jobs():
     """Lit le fichier JSON le plus récent du dossier data/."""
-    data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
-    
-    if not os.path.isdir(data_dir):
-        print(f"ERREUR: Dossier data/ introuvable: {data_dir}")
+    data_dir = os.getenv("DATA_DIR", os.path.join(os.path.dirname(__file__), "..", "data"))
+    incoming_dir = os.path.join(data_dir, "incoming")
+
+    if not os.path.isdir(incoming_dir):
+        print(f"ERREUR: Dossier incoming/ introuvable: {incoming_dir}")
         return None
 
-    json_files = sorted(glob.glob(os.path.join(data_dir, "*.json")))
+    json_files = sorted(glob.glob(os.path.join(incoming_dir, "*.json")))
     if not json_files:
         print("ERREUR: Aucun fichier JSON trouvé dans data/")
         return None
@@ -64,7 +63,8 @@ def load_jobs():
                 print("ERREUR: Fichier JSON vide")
                 return None
             print(f"OK: Chargé {len(data)} offres d'emploi")
-            return data
+            return data, path
+
     except Exception as e:
         print(f"ERREUR lors de la lecture: {str(e)}")
         return None
@@ -74,12 +74,12 @@ def load_jobs():
 # INITIALISATION BASE DE DONNEES
 # =========================================================
 def init_db():
-    """Crée la table jobs_embeddings si elle n'existe pas."""
-    with engine.connect() as conn:
+    """Crée la table base_embedding si elle n'existe pas."""
+    with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
 
         conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS jobs_embeddings (
+        CREATE TABLE IF NOT EXISTS base_embedding (
             id TEXT PRIMARY KEY,
             title TEXT,
             text TEXT,
@@ -89,8 +89,6 @@ def init_db():
             embedding VECTOR(384)
         );
         """))
-
-        conn.commit()
         print("Base de données initialisée ✓")
 
 
@@ -101,7 +99,7 @@ def upsert_batch(rows):
     """Insère ou met à jour les offres en base (mise à jour si date plus récente)."""
     with engine.begin() as conn:
         conn.execute(text("""
-        INSERT INTO jobs_embeddings (
+        INSERT INTO base_embedding (
             id,
             title,
             text,
@@ -126,7 +124,7 @@ def upsert_batch(rows):
             competences = EXCLUDED.competences,
             date_actualisation = EXCLUDED.date_actualisation,
             embedding = EXCLUDED.embedding
-        WHERE EXCLUDED.date_actualisation > jobs_embeddings.date_actualisation;
+        WHERE EXCLUDED.date_actualisation > base_embedding.date_actualisation;
         """), rows)
 
 
@@ -142,11 +140,37 @@ def process_batch(buffer, texts, model):
 
     upsert_batch(buffer)
 
+def archive_file(json_path):
+    data_dir = os.getenv("DATA_DIR", os.path.join(os.path.dirname(__file__), "..", "data"))
+
+    archive_dir = os.path.join(
+        data_dir,
+        "archive"
+    )
+
+    os.makedirs(
+        archive_dir,
+        exist_ok=True
+    )
+
+    filename = os.path.basename(json_path)
+
+    destination = os.path.join(
+        archive_dir,
+        filename
+    )
+
+    shutil.move(
+        json_path,
+        destination
+    )
+
+    print(f"Fichier archivé : {destination}")
 
 # =========================================================
 # PIPELINE PRINCIPAL
 # =========================================================
-def run_pipeline(batch_size=64):
+def run_pipeline(batch_size=16):
     """
     Exécute le pipeline d'indexation complet :
     1. Initialise la base
@@ -157,8 +181,13 @@ def run_pipeline(batch_size=64):
     print("Initialisation du pipeline...")
     init_db()
 
-    jobs = load_jobs()
-    if not jobs:
+    result = load_jobs()
+    if result is None:
+        raise Exception("Impossible de charger le fichier json")
+    
+    jobs,json_path = result
+
+    if len(jobs)==0:
         print("Aucune donnée à traiter")
         return
 
@@ -195,6 +224,8 @@ def run_pipeline(batch_size=64):
     if buffer:
         process_batch(buffer, texts, model)
         print(f"  Traité {len(jobs)}/{len(jobs)} offres...")
+
+    archive_file(json_path)
 
     print("✓ Pipeline complété")
 
