@@ -10,6 +10,7 @@ x-airflow-common: &airflow-common
 
   environment:
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__DEFAULT_TIMEZONE: Europe/Paris
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-airflow}@airflow-db:5432/${AIRFLOW_DB_NAME:-airflow}
     AIRFLOW__CORE__LOAD_EXAMPLES: "False"
     DATA_DIR: /opt/airflow/data

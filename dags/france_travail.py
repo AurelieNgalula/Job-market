@@ -31,7 +31,7 @@ with DAG(
     description="Collecte des offres France Travail puis indexation dans PostgreSQL",
     default_args=default_args,
     start_date=pendulum.datetime(2026, 1, 1, tz=local_tz),
-    schedule="0 23 * * *",          # Tous les jours à 23h00
+    schedule="0 22 * * *",          # Tous les jours à 22h00
     catchup=False,
     max_active_runs=1,
     tags=["france-travail", "embeddings"],
