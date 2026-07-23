@@ -1,82 +1,84 @@
-# Job-market
+# Job Market
 
-Ce projet Git contient une application Python qui récupère des offres d'emploi via l'API France Travail, stocke les résultats en JSON et permet une recherche sémantique via embeddings dans une base PostgreSQL.
+Ce projet collecte des offres d’emploi depuis l’API France Travail, stocke les résultats au format JSON, indexe les offres dans PostgreSQL avec des embeddings et expose une API de recherche sémantique via FastAPI.
 
-## Tableau de bord Git
+## Fonctionnement global
 
-Ce dépôt est conçu comme un projet Git standard :
-- Cloner le dépôt depuis GitHub
-- Installer les dépendances
-- Lancer les scripts localement ou via Docker
-- Versionner les modifications dans des branches dédiées
+Le flux principal est le suivant :
 
-Une nouvelle personne peut démarrer rapidement en clonant le repo, en configurant ses variables d'environnement, puis en utilisant Docker ou la CLI Python.
+1. La collecte des offres est réalisée par un script Python depuis l’API France Travail.
+2. Les résultats sont sauvegardés dans le dossier data/incoming.
+3. Un DAG Airflow exécute ensuite l’indexation des offres dans une base PostgreSQL avec pgvector.
+4. Une application FastAPI permet de rechercher les offres par mots-clés, localisation et similarité sémantique.
 
-## Architecture du projet
+## Structure du dépôt
 
-```
+```text
 Job-market/
 ├── backend/
-│   ├── app.py              # API FastAPI + interface web
-│   ├── fetch_jobs.py       # Récupération des offres France Travail
-│   ├── job_indexer.py      # Pipeline d'indexation et embeddings
-│   ├── utils.py            # Utilitaires OAuth2 et parsing
-│   ├── requirements.txt    # Dépendances Python
-│   └── templates/          # Interface HTML
-├── data/                   # Données JSON utilisées pour l'indexation
+│   ├── app.py                  # API FastAPI + interface web
+│   ├── requirements.txt
+│   └── templates/
+├── dags/
+│   └── france_travail.py       # DAG Airflow
+├── data/
+│   ├── archive/
+│   └── incoming/
+├── scripts/
+│   ├── add.py                  # Pipeline d'indexation
+│   ├── get_offres.py           # Collecte des offres
+│   └── utils.py
+├── docker-compose.yaml
 ├── Dockerfile
-├── docker-compose.yml
-├── README.md
-├── DOCKER_README.md
-├── .env.example
-└── .gitignore
+├── requirements.txt
+└── README.md
 ```
 
 ## Prérequis
 
-- Git
-- Docker Engine 20.10+
-- Docker Compose 2.0+
-- Python 3.14+ (optionnel si vous n'utilisez pas Docker)
-- Identifiants France Travail : `CLIENT_ID` et `CLIENT_SECRET`
+- Python 3.11+
+- Docker et Docker Compose
+- Une base PostgreSQL accessible avec l’extension vector
+- Des identifiants France Travail : CLIENT_ID et CLIENT_SECRET
 
-## Démarrage rapide (Git + Docker)
+## Variables d’environnement
 
-### 1. Cloner le dépôt
+Créer un fichier .env à la racine du projet avec les variables suivantes :
 
-```bash
-git clone <url_du_repo> Job-market
-cd Job-market
+```env
+CLIENT_ID=votre_client_id
+CLIENT_SECRET=votre_client_secret
+
+# Base PostgreSQL utilisée pour l'indexation et la recherche
+DB_POSTGRES_URL=postgresql://user:password@host:5432/jobmarket_db
+
+# Optionnel pour Airflow
+AIRFLOW_DB_USER=airflow
+AIRFLOW_DB_PASSWORD=airflow
+AIRFLOW_DB_NAME=airflow
 ```
 
-### 2. Construire et démarrer avec Docker Compose
+## Démarrage avec Docker
+
+### 1. Construire et lancer les services
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
-Cette commande lance :
-- `app` (FastAPI)
-- `worker` (optionnel, pour l’indexation)
-
-Pour démarrer aussi le worker de traitement :
-
-```bash
-docker compose up --build --profile worker
-```
-
-### 3. Vérifier l’état des services
+### 2. Vérifier les services
 
 ```bash
 docker compose ps
 ```
 
-### 4. Accéder à l’API
+### 3. Accéder aux interfaces
 
-- Service FastAPI : `http://localhost:8001`
-- Documentation Swagger : `http://localhost:8001/docs`
+- Application FastAPI : http://localhost:8001
+- Documentation Swagger : http://localhost:8001/docs
+- Airflow UI : http://localhost:8080
 
-## Lancer sans Docker
+## Lancement local sans Docker
 
 ### 1. Installer les dépendances
 
@@ -84,153 +86,60 @@ docker compose ps
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
-pip install -r script/requirements.txt
+pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 
-### 2. Configurer les identifiants
+### 2. Collecter les offres
 
-Créer un fichier `.env` à la racine :
-
-```env
-CLIENT_ID=votre_client_id
-CLIENT_SECRET=votre_client_secret
-DATABASE_URL=postgresql://user:password@host:5432/dbname?sslmode=require
-DB_POSTGRES_URL=postgresql://user:password@host:5432/dbname?sslmode=require
+```bash
+python3 scripts/get_offres.py
 ```
 
-### 3. Récupérer les offres
+### 3. Indexer les offres dans PostgreSQL
+
+```bash
+python3 scripts/add.py
+```
+
+### 4. Lancer l’API FastAPI
 
 ```bash
 cd backend
-python3 fetch_jobs.py
+uvicorn app:app --host 0.0.0.0 --port 8001
 ```
 
-### 4. Lancer le worker / indexation
+## API disponible
 
-```bash
-cd backend
-python3 job_indexer.py
-```
+L’application FastAPI expose les endpoints suivants :
 
-## Utilisation du Dockerfile
+- GET / : interface web de recherche
+- GET /search?query=...&location=...&limit=10 : recherche JSON
+- GET /search-stream?query=... : recherche en streaming SSE
+- GET /health : vérification de l’état du service
 
-### Construire l’image
+## Airflow
 
-```bash
-docker build -t job-market:latest .
-```
+Le DAG défini dans dags/france_travail.py exécute deux tâches :
 
-### Lancer l’application FastAPI
+- collecte_offres : récupération des offres sur les dernières 24 heures
+- indexation_offres : génération des embeddings et insertion dans PostgreSQL
 
-```bash
-docker run --rm -p 8001:8001 \
-  -e DATABASE_URL=postgresql://user:password@host:5432/dbname?sslmode=require \
-  -v "$(pwd)/backend:/app/backend" \
-  -v "$(pwd)/data:/app/data" \
-  job-market:latest
-```
+Il est planifié tous les jours à 22:00 (Europe/Paris).
 
-### Lancer le worker
+## Notes importantes
 
-```bash
-docker run --rm \
-  -e DATABASE_URL=postgresql://user:password@host:5432/dbname?sslmode=require \
-  -v "$(pwd)/backend:/app/backend" \
-  -v "$(pwd)/data:/app/data" \
-  job-market:latest \
-  bash -c "cd backend && python3 job_indexer.py"
-```
+- Les fichiers JSON collectés sont stockés dans data/incoming puis déplacés vers data/archive après indexation.
+- La recherche sémantique repose sur le modèle sentence-transformers all-MiniLM-L6-v2.
+- La base PostgreSQL doit contenir l’extension vector pour les opérations pgvector.
 
-## Structure des scripts
+## Dépendances principales
 
-### `backend/fetch_jobs.py`
-
-- Envoie des requêtes vers l’API France Travail
-- Gère les fenêtres temporelles et la pagination
-- Sauvegarde les offres récupérées dans `data/`
-
-### `backend/job_indexer.py`
-
-- Charge les données JSON
-- Calcule des embeddings avec `SentenceTransformer`
-- Enregistre les vecteurs dans PostgreSQL via `pgvector`
-- Propose une recherche sémantique interactive
-
-## Git Workflows recommandés
-
-- Créer une branche pour chaque fonctionnalité ou correction :
-  ```bash
-git checkout -b feature/ma-fonctionnalite
-```
-- Ajouter, committer et pousser :
-  ```bash
-git add .
-git commit -m "Ajout de la doc Docker"
-git push origin feature/ma-fonctionnalite
-```
-- Ouvrir une Pull Request pour revue
-
-## Notes
-
-- Le `docker-compose.yml` inclut un service `worker` avec le profil `worker`.
-- Le service `app` expose le port `8001`.
-- Les dossiers `backend` et `data` sont montés en volume pour partager les sources avec les containers.
-
-#### 3️⃣ Recréer l'environnement virtuel
-
-```bash
-cd /Users/yaoyao/Desktop/Job-market
-rm -rf .venv
-/opt/homebrew/bin/python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -r script/requirements.txt
-```
-
-#### 4️⃣ Vérifier l'installation
-
-```bash
-source .venv/bin/activate
-python3 --version
-python3 -c "import ssl; print('OpenSSL:', ssl.OPENSSL_VERSION)"
-```
-
-**Résultat attendu** :
-```
-Python 3.14.3
-OpenSSL: OpenSSL 3.6.1 27 Jan 2026
-```
-
-### Sur Linux
-
-```bash
-# Ubuntu/Debian
-sudo apt-get update
-sudo apt-get install python3.14 python3.14-venv python3.14-dev
-
-# Fedora
-sudo dnf install python3.14 python3.14-devel
-
-# Puis recréer le venv comme sur macOS ci-dessus
-```
-
-
-
-## Contact / Support
-
-Pour toute question ou problème, consultez la [documentation France Travail API](https://www.francetravail.fr/partenaire/nos-api).
-
----
-
-**Dernière mise à jour** : 6 mars 2026
-
-### 📦 Dépendances installées (mise à jour 2026-03-06)
-
-| Package | Version |
-|---------|---------|
-| requests | 2.32.5 |
-| python-dotenv | 1.2.2 |
-| pandas | 3.0.1 |
-| numpy | 2.4.2 |
-| urllib3 | 2.6.3 |
-| certifi | 2026.2.25 |
+- FastAPI
+- Uvicorn
+- SQLAlchemy
+- sentence-transformers
+- pgvector
+- Apache Airflow
+- requests
+- python-dotenv
