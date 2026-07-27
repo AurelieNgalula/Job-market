@@ -10,6 +10,9 @@ Le flux principal est le suivant :
 2. Les résultats sont sauvegardés dans le dossier data/incoming.
 3. Un DAG Airflow exécute ensuite l’indexation des offres dans une base PostgreSQL avec pgvector.
 4. Une application FastAPI permet de rechercher les offres par mots-clés, localisation et similarité sémantique.
+5. L’API expose des endpoints techniques et de supervision : /health, /stats et /metrics.
+6. Prometheus scrape régulièrement l’endpoint /metrics pour collecter les métriques applicatives.
+7. Grafana consomme Prometheus comme datasource et affiche les tableaux de bord de suivi (requêtes, latence, endpoints).
 
 ## Structure du dépôt
 
@@ -24,6 +27,17 @@ Job-market/
 ├── data/
 │   ├── archive/
 │   └── incoming/
+├── monitoring/
+│   ├── prometheus/
+│   │   └── prometheus.yml      # Configuration de scraping Prometheus
+│   └── grafana/
+│       ├── dashboards/
+│       │   └── fastapi-dashboard.json
+│       └── provisioning/
+│           ├── dashboards/
+│           │   └── default.yml
+│           └── datasources/
+│               └── prometheus.yml
 ├── scripts/
 │   ├── add.py                  # Pipeline d'indexation
 │   ├── get_offres.py           # Collecte des offres
@@ -77,6 +91,8 @@ docker compose ps
 - Application FastAPI : http://localhost:8001
 - Documentation Swagger : http://localhost:8001/docs
 - Airflow UI : http://localhost:8080
+- Prometheus UI : http://localhost:9090
+- Grafana UI : http://localhost:3000 (cliquer sur skip sur la page login, puis aller dans dashboards et choisir le projet job market)
 
 ## Lancement local sans Docker
 
