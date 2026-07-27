@@ -4,12 +4,16 @@ Endpoints:
 - GET / : Interface web
 - GET /search : Recherche simple (retourne JSON)
 - GET /search-stream : Recherche en streaming (SSE)
+- GET /health : Vérifie que l'app fonctionne
+- GET /stats : Statistiques de l'application (monitoring)
 """
 
 import json
 import os
 import sys
 from pathlib import Path
+import time
+from datetime import datetime
 try:
     from dotenv import load_dotenv
 except ImportError:  # pragma: no cover
@@ -22,6 +26,22 @@ from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, HTMLResponse
 from sqlalchemy import create_engine, text
 from sentence_transformers import SentenceTransformer
+from prometheus_fastapi_instrumentator import Instrumentator
+
+
+# =========================================================
+# MONITORING - Compteurs en mémoire
+# =========================================================
+stats = {
+    "demarrage": datetime.now().isoformat(),  # Quand l'app a démarré
+    "total_requetes": 0,                       # Nombre total de requêtes
+    "requetes_par_endpoint": {},               # Compteur par page
+    "total_recherches": 0,                     # Nombre de recherches effectuées
+    "temps_reponse_moyen_ms": 0,               # Temps de réponse moyen
+    "derniere_requete": None,                  # Date de la dernière requête
+    "erreurs": 0,                              # Nombre d'erreurs
+    "_temps_total": 0,                         # (interne) pour calculer la moyenne
+}
 
 BACKEND_DIR = Path(__file__).resolve().parent
 if str(BACKEND_DIR) not in sys.path:
@@ -36,6 +56,48 @@ load_dotenv()
 # =========================================================
 app = FastAPI(title="Job Market")
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+
+# Exposition des métriques Prometheus sur /metrics
+Instrumentator().instrument(app).expose(app)
+
+# =========================================================
+# MIDDLEWARE DE MONITORING
+# =========================================================
+# Un middleware s'exécute AVANT et APRÈS chaque requête
+@app.middleware("http")
+async def monitoring_middleware(request: Request, call_next):
+    """
+    Ce middleware :
+    1. Note l'heure de début
+    2. Laisse la requête s'exécuter
+    3. Calcule le temps écoulé
+    4. Met à jour les statistiques
+    """
+    debut = time.time()  # l'heure de début
+    
+    try:
+        response = await call_next(request)  # exécute la requête
+        
+        # calcule le temps en millisecondes
+        duree_ms = (time.time() - debut) * 1000
+        
+        # met à jour les compteurs
+        stats["total_requetes"] += 1
+        stats["derniere_requete"] = datetime.now().isoformat()
+        
+        # comptage par endpoint
+        endpoint = request.url.path
+        stats["requetes_par_endpoint"][endpoint] = stats["requetes_par_endpoint"].get(endpoint, 0) + 1
+        
+        # calcule le temps moyen
+        stats["_temps_total"] += duree_ms
+        stats["temps_reponse_moyen_ms"] = round(stats["_temps_total"] / stats["total_requetes"], 2)
+        
+        return response
+        
+    except Exception as e:
+        stats["erreurs"] += 1
+        raise e
 
 # =========================================================
 # DATABASE
@@ -161,12 +223,72 @@ def stream_search(query: str, location: str = None, limit: int = 10):
 
 
 # =========================================================
-# HEALTH CHECK
+# ENDPOINTS DE MONITORING 
 # =========================================================
 @app.get("/health")
-def health():
-    """Health check endpoint."""
-    return {"status": "ok"}
+def health_check():
+    """
+    HEALTH CHECK - Vérifie que l'application fonctionne.
+    
+    Retourne:
+    - status: "ok" si tout va bien, "error" sinon
+    - database: "connectée" si PostgreSQL répond
+    - uptime: depuis combien de temps l'app tourne
+    
+    Utile pour: vérifier rapidement que l'app est en vie.
+    """
+    # On vérifie la connexion à la base de données
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        db_status = "connectée"
+    except Exception as e:
+        db_status = f"erreur: {str(e)}"
+    
+    # On calcule depuis combien de temps l'app tourne
+    demarrage = datetime.fromisoformat(stats["demarrage"])
+    uptime = datetime.now() - demarrage
+    uptime_str = str(uptime).split('.')[0]  # Format: "1:23:45"
+    
+    return {
+        "status": "ok" if db_status == "connectée" else "error",
+        "message": "L'application Job Market fonctionne!",
+        "database": db_status,
+        "uptime": uptime_str,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/stats")
+def get_stats():
+    """
+    STATISTIQUES - Montre ce qui se passe dans l'application.
+    
+    Retourne des métriques simples:
+    - Combien de requêtes ont été faites
+    - Quelles pages sont les plus visitées
+    - Le temps de réponse moyen
+    - Combien d'erreurs il y a eu
+    
+    Utile pour: comprendre l'usage de l'app.
+    """
+    demarrage = datetime.fromisoformat(stats["demarrage"])
+    uptime = datetime.now() - demarrage
+    
+    return {
+        "resume": {
+            "total_requetes": stats["total_requetes"],
+            "total_recherches": stats["total_recherches"],
+            "erreurs": stats["erreurs"],
+            "temps_reponse_moyen_ms": stats["temps_reponse_moyen_ms"]
+        },
+        "endpoints_populaires": stats["requetes_par_endpoint"],
+        "info_app": {
+            "demarrage": stats["demarrage"],
+            "uptime": str(uptime).split('.')[0],
+            "derniere_requete": stats["derniere_requete"]
+        }
+    }
 
 
 if __name__ == "__main__":
