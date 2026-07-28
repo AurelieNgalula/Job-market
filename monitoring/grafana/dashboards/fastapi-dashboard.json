@@ -45,7 +45,7 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total[5m]))",
+          "expr": "sum(rate(jobmarket_requests_total[5m]))",
           "legendFormat": "Requêtes/sec",
           "refId": "A"
         }
@@ -68,11 +68,11 @@
             "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.5 },
-              { "color": "red", "value": 1 }
+              { "color": "yellow", "value": 200 },
+              { "color": "red", "value": 500 }
             ]
           },
-          "unit": "s"
+          "unit": "ms"
         }
       },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
@@ -92,12 +92,12 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
-          "legendFormat": "p95 Latence",
+          "expr": "jobmarket_response_time_avg_ms",
+          "legendFormat": "Temps moyen",
           "refId": "A"
         }
       ],
-      "title": "Latence P95",
+      "title": "Temps de réponse moyen",
       "type": "stat"
     },
     {
@@ -169,8 +169,8 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total[1m])) by (handler)",
-          "legendFormat": "{{handler}}",
+          "expr": "sum(rate(jobmarket_requests_by_endpoint_total[1m])) by (endpoint)",
+          "legendFormat": "{{endpoint}}",
           "refId": "A"
         }
       ],
@@ -226,7 +226,7 @@
               { "color": "green", "value": null }
             ]
           },
-          "unit": "s"
+          "unit": "ms"
         }
       },
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 18 },
@@ -246,17 +246,17 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, handler))",
-          "legendFormat": "p50 - {{handler}}",
+          "expr": "sum(rate(jobmarket_response_time_by_endpoint_total_ms[5m])) by (endpoint) / sum(rate(jobmarket_requests_by_endpoint_total[5m])) by (endpoint)",
+          "legendFormat": "Moyenne 5m - {{endpoint}}",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, handler))",
-          "legendFormat": "p95 - {{handler}}",
+          "expr": "sum(rate(jobmarket_response_time_by_endpoint_total_ms[1m])) by (endpoint) / sum(rate(jobmarket_requests_by_endpoint_total[1m])) by (endpoint)",
+          "legendFormat": "Moyenne 1m - {{endpoint}}",
           "refId": "B"
         }
       ],
-      "title": "Latence par endpoint",
+      "title": "Temps de réponse moyen par endpoint",
       "type": "timeseries"
     },
     {
@@ -298,7 +298,7 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+          "expr": "sum(rate(jobmarket_errors_total[5m])) / sum(rate(jobmarket_requests_total[5m])) * 100",
           "legendFormat": "Taux d'erreur",
           "refId": "A"
         }
@@ -343,12 +343,12 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "sum(http_requests_total)",
-          "legendFormat": "Total requêtes",
+          "expr": "sum(jobmarket_searches_total)",
+          "legendFormat": "Total recherches",
           "refId": "A"
         }
       ],
-      "title": "Total requêtes",
+      "title": "Total recherches",
       "type": "stat"
     }
   ],
@@ -366,6 +366,6 @@
   "timezone": "browser",
   "title": "Job Market - FastAPI Monitoring",
   "uid": "job-market-fastapi",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }

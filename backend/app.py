@@ -27,6 +27,7 @@ from fastapi.responses import StreamingResponse, HTMLResponse
 from sqlalchemy import create_engine, text
 from sentence_transformers import SentenceTransformer
 from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Counter, Gauge
 
 
 # =========================================================
@@ -43,6 +44,56 @@ stats = {
     "_temps_total": 0,                         # (interne) pour calculer la moyenne
 }
 
+# =========================================================
+# METRIQUES PROMETHEUS (alignées avec /stats)
+# =========================================================
+PROM_REQUESTS_TOTAL = Counter(
+    "jobmarket_requests_total",
+    "Nombre total de requetes traitees par l'application"
+)
+
+PROM_REQUESTS_BY_ENDPOINT_TOTAL = Counter(
+    "jobmarket_requests_by_endpoint_total",
+    "Nombre de requetes par endpoint",
+    ["endpoint"]
+)
+
+PROM_SEARCHES_TOTAL = Counter(
+    "jobmarket_searches_total",
+    "Nombre total de recherches effectuees"
+)
+
+PROM_ERRORS_TOTAL = Counter(
+    "jobmarket_errors_total",
+    "Nombre total d'erreurs applicatives"
+)
+
+PROM_RESPONSE_TIME_TOTAL_MS = Counter(
+    "jobmarket_response_time_total_ms",
+    "Somme des temps de reponse en millisecondes"
+)
+
+PROM_RESPONSE_TIME_BY_ENDPOINT_TOTAL_MS = Counter(
+    "jobmarket_response_time_by_endpoint_total_ms",
+    "Somme des temps de reponse en millisecondes par endpoint",
+    ["endpoint"]
+)
+
+PROM_RESPONSE_TIME_AVG_MS = Gauge(
+    "jobmarket_response_time_avg_ms",
+    "Temps de reponse moyen en millisecondes"
+)
+
+PROM_LAST_REQUEST_TIMESTAMP = Gauge(
+    "jobmarket_last_request_timestamp_seconds",
+    "Timestamp unix de la derniere requete"
+)
+
+PROM_STARTUP_TIMESTAMP = Gauge(
+    "jobmarket_startup_timestamp_seconds",
+    "Timestamp unix du demarrage de l'application"
+)
+
 BACKEND_DIR = Path(__file__).resolve().parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -56,6 +107,8 @@ load_dotenv()
 # =========================================================
 app = FastAPI(title="Job Market")
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+
+PROM_STARTUP_TIMESTAMP.set(datetime.now().timestamp())
 
 # Exposition des métriques Prometheus sur /metrics
 Instrumentator().instrument(app).expose(app)
@@ -74,30 +127,34 @@ async def monitoring_middleware(request: Request, call_next):
     4. Met à jour les statistiques
     """
     debut = time.time()  # l'heure de début
-    
+    endpoint = request.url.path
+
     try:
         response = await call_next(request)  # exécute la requête
-        
-        # calcule le temps en millisecondes
+
+        return response
+
+    except Exception:
+        stats["erreurs"] += 1
+        PROM_ERRORS_TOTAL.inc()
+        raise
+
+    finally:
+        # On compte toutes les requetes (y compris celles en erreur)
         duree_ms = (time.time() - debut) * 1000
-        
-        # met à jour les compteurs
+
         stats["total_requetes"] += 1
         stats["derniere_requete"] = datetime.now().isoformat()
-        
-        # comptage par endpoint
-        endpoint = request.url.path
         stats["requetes_par_endpoint"][endpoint] = stats["requetes_par_endpoint"].get(endpoint, 0) + 1
-        
-        # calcule le temps moyen
         stats["_temps_total"] += duree_ms
         stats["temps_reponse_moyen_ms"] = round(stats["_temps_total"] / stats["total_requetes"], 2)
-        
-        return response
-        
-    except Exception as e:
-        stats["erreurs"] += 1
-        raise e
+
+        PROM_REQUESTS_TOTAL.inc()
+        PROM_REQUESTS_BY_ENDPOINT_TOTAL.labels(endpoint=endpoint).inc()
+        PROM_RESPONSE_TIME_TOTAL_MS.inc(duree_ms)
+        PROM_RESPONSE_TIME_BY_ENDPOINT_TOTAL_MS.labels(endpoint=endpoint).inc(duree_ms)
+        PROM_RESPONSE_TIME_AVG_MS.set(stats["temps_reponse_moyen_ms"])
+        PROM_LAST_REQUEST_TIMESTAMP.set(time.time())
 
 # =========================================================
 # DATABASE
@@ -206,12 +263,17 @@ def search_api( query: str = None, location: str = None, limit: int = 10):
     ensure_table_exists()
     if not query:
         return []
+    stats["total_recherches"] += 1
+    PROM_SEARCHES_TOTAL.inc()
     return list(search_stream(query, location, limit))
 
 
 @app.get("/search-stream")
 def stream_search(query: str, location: str = None, limit: int = 10):
     """Endpoint de recherche en streaming (SSE)."""
+    stats["total_recherches"] += 1
+    PROM_SEARCHES_TOTAL.inc()
+
     def event_generator():
         for result in search_stream(query, location, limit):
             yield f"data: {json.dumps(result)}\n\n"
