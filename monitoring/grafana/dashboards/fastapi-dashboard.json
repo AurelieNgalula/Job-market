@@ -246,7 +246,7 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "sum(rate(jobmarket_response_time_by_endpoint_total_ms[5m])) by (endpoint) / sum(rate(jobmarket_requests_by_endpoint_total[5m])) by (endpoint)",
+          "expr": "sum(rate(jobmarket_response_time_by_endpoint_total_ms_total[5m])) by (endpoint) / sum(rate(jobmarket_requests_by_endpoint_total[5m])) by (endpoint)",
           "legendFormat": "Moyenne 5m - {{endpoint}}",
           "refId": "A"
         },

@@ -111,7 +111,7 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 PROM_STARTUP_TIMESTAMP.set(datetime.now().timestamp())
 
 # Exposition des métriques Prometheus sur /metrics
-Instrumentator().instrument(app).expose(app)
+Instrumentator(should_group_status_codes=False, should_ignore_untemplated=True).instrument(app).expose(app)
 
 # =========================================================
 # MIDDLEWARE DE MONITORING
