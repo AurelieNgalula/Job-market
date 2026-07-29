@@ -28,8 +28,8 @@
           "unit": "reqps"
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "id": 1,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+      "id": 6,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -326,8 +326,8 @@
           "unit": "short"
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
-      "id": 6,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
