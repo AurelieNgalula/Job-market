@@ -120,10 +120,6 @@ def collect_offres():
             except Exception:
                 total_jobs = len(all_jobs)
 
-            print(
-                f"Offres récupérées : {len(all_jobs)} / {total_jobs}"
-            )
-
             start += batch_size
 
             if start >= total_jobs:
