@@ -1,0 +1,149 @@
+name: job-market
+
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+
+  env_file:
+    - .env    
+
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__DEFAULT_TIMEZONE: Europe/Paris
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-airflow}@airflow-db:5432/${AIRFLOW_DB_NAME:-airflow}
+    AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    DATA_DIR: /opt/airflow/data
+
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./scripts:/opt/airflow/scripts
+    - ./data:/opt/airflow/data
+    - airflow-logs:/opt/airflow/logs
+
+  networks:
+    - job-market-network
+
+services:
+ # =========================================================
+  # DATABASE Airflow 
+  # =========================================================
+  airflow-db:
+    image: postgres:16-alpine
+    container_name: job-market-airflow-db
+    environment:
+      POSTGRES_DB: ${AIRFLOW_DB_NAME:-airflow}
+      POSTGRES_USER: ${AIRFLOW_DB_USER:-airflow}
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD:-airflow}
+    volumes:
+      - airflow-db-data:/var/lib/postgresql/data
+    networks:
+      - job-market-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AIRFLOW_DB_USER:-airflow} -d ${AIRFLOW_DB_NAME:-airflow}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  airflow-init:
+    <<: *airflow-common
+    container_name: job-market-airflow-init
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-airflow}@airflow-db:5432/${AIRFLOW_DB_NAME:-airflow}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      DATA_DIR: /opt/airflow/data
+
+    command:
+      - bash
+      - -c
+      - |
+        airflow db migrate
+        airflow users create \
+          --role Admin \
+          --username admin \
+          --password admin \
+          --email airflow@example.com \
+          --firstname Airflow \
+          --lastname Admin
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: job-market-airflow-webserver
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    ports:
+      - "${AIRFLOW_WEB_PORT:-8080}:8080"
+    command: webserver
+    restart: unless-stopped
+
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: job-market-airflow-scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    command: scheduler
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: job-market-app
+    command: bash -c "cd /app/backend && uvicorn app:app --host 0.0.0.0 --port 8001"
+    ports:
+      - "${APP_PORT:-8001}:8001"
+    environment:
+      DB_POSTGRES_URL: ${DB_POSTGRES_URL}
+    volumes:
+      - ./backend:/app/backend
+      - ./data:/app/data
+    networks:
+      - job-market-network
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: job-market-prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - job-market-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: job-market-grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    networks:
+      - job-market-network
+    restart: unless-stopped
+
+
+volumes:
+  airflow-db-data:
+  airflow-logs:
+  grafana-data:
+
+networks:
+  job-market-network:
+    driver: bridge

@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Scrape de la FastAPI via l'endpoint /metrics
+  - job_name: 'fastapi'
+    static_configs:
+      - targets: ['app:8001']
+    metrics_path: '/metrics'
+
+  # Auto-monitoring de Prometheus lui-même
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
