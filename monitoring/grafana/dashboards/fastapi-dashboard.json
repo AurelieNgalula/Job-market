@@ -350,7 +350,62 @@
       ],
       "title": "Total recherches",
       "type": "stat"
-    }
+    },
+      {
+    "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+    },
+    "fieldConfig": {
+      "defaults": {
+        "color": {
+          "mode": "palette-classic"
+        },
+        "mappings": [],
+        "thresholds": {
+          "mode": "absolute",
+          "steps": [
+            {
+              "color": "green",
+              "value": null
+            }
+          ]
+        },
+        "unit": "dateTimeAsIso"
+      }
+    },
+    "gridPos": {
+      "h": 8,
+      "w": 12,
+      "x": 12,
+      "y": 36
+    },
+    "id": 7,
+    "options": {
+      "colorMode": "value",
+      "graphMode": "area",
+      "justifyMode": "auto",
+      "orientation": "auto",
+      "reduceOptions": {
+        "calcs": [
+          "lastNotNull"
+        ],
+        "fields": "",
+        "values": false
+      },
+      "textMode": "auto"
+    },
+    "pluginVersion": "10.0.0",
+    "targets": [
+      {
+        "expr": "jobmarket_last_request_timestamp_seconds*1000",
+        "legendFormat": "Dernière requête",
+        "refId": "A"
+      }
+    ],
+    "title": "Dernière requête reçue",
+    "type": "stat"
+  }
   ],
   "refresh": "5s",
   "schemaVersion": 38,
