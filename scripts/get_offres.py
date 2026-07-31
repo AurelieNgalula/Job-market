@@ -28,7 +28,7 @@ def collect_offres():
         f"{global_max_creation_dt.isoformat()}"
     )
 
-    window_days = 0.05          # environ 1h12
+    window_hours = 1          
     batch_size = 150
     type_contrat = "CDI"
 
@@ -46,7 +46,7 @@ def collect_offres():
     while window_start < global_max_creation_dt:
 
         window_end = min(
-            window_start + datetime.timedelta(days=window_days),
+            window_start + datetime.timedelta(hours=window_hours),
             global_max_creation_dt,
         )
 

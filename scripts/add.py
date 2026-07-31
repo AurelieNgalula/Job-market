@@ -18,7 +18,6 @@ import shutil
 DB_POSTGRES_URL = (
     os.getenv("DB_POSTGRES_URL")
     or os.getenv("DATABASE_URL")
-    or "postgresql://jobmarket:jobmarket_secure_password_123@postgres:5432/jobmarket_db"
 )
 engine = create_engine(DB_POSTGRES_URL, pool_pre_ping=True)
 

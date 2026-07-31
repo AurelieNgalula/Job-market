@@ -22,3 +22,7 @@ z_back/
 # Logs / databases
 *.log
 *.sqlite3
+
+# Airflow logs
+logs/*
+!logs/.gitkeep
