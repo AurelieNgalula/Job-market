@@ -27,6 +27,7 @@ Job-market/
 ├── data/
 │   ├── archive/
 │   └── incoming/
+├── logs/   
 ├── monitoring/
 │   ├── prometheus/
 │   │   └── prometheus.yml      # Configuration de scraping Prometheus
@@ -64,7 +65,7 @@ CLIENT_ID=votre_client_id
 CLIENT_SECRET=votre_client_secret
 
 # Base PostgreSQL utilisée pour l'indexation et la recherche
-DB_POSTGRES_URL=postgresql://user:password@host:5432/jobmarket_db
+DB_POSTGRES_URL=postgresql://user:password@host:5432/jobmarket_db (base distante Neon)
 
 # Optionnel pour Airflow
 AIRFLOW_DB_USER=airflow
