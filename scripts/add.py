@@ -229,5 +229,5 @@ def run_pipeline(batch_size=16):
     print("✓ Pipeline complété")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__": # Pour exécuter le script directement
     run_pipeline()

@@ -12,7 +12,7 @@ import time
 import os
 from datetime import datetime
 from typing import Optional
-
+import re
 
 # =========================================================
 # CONFIGURATION OAUTH2
@@ -32,7 +32,10 @@ def clean_text(text):
     
     text = text.lower().strip()
     text = unicodedata.normalize("NFKD", text)
-    return "".join(c for c in text if not unicodedata.combining(c))
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    text = re.sub(r"[^a-z0-9\s]", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
 
 
 # =========================================================
