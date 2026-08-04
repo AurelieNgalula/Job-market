@@ -60,7 +60,7 @@ Job-market/
 
 Créer un fichier .env à la racine du projet avec les variables suivantes :
 
-```env
+```env 
 CLIENT_ID=votre_client_id
 CLIENT_SECRET=votre_client_secret
 
@@ -68,6 +68,7 @@ CLIENT_SECRET=votre_client_secret
 DB_POSTGRES_URL=postgresql://user:password@host:5432/jobmarket_db (base distante Neon)
 
 # Optionnel pour Airflow
+profil standard : 
 AIRFLOW_DB_USER=airflow
 AIRFLOW_DB_PASSWORD=airflow
 AIRFLOW_DB_NAME=airflow
