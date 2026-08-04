@@ -39,7 +39,7 @@ def get_model():
 # CHARGEMENT DES DONNEES
 # =========================================================
 def load_jobs():
-    """Lit le fichier JSON le plus récent du dossier data/."""
+    """Lit tous les fichiers JSON du dossier data/incoming un par un."""
     data_dir = os.getenv("DATA_DIR", os.path.join(os.path.dirname(__file__), "..", "data"))
     incoming_dir = os.path.join(data_dir, "incoming")
 
@@ -49,24 +49,28 @@ def load_jobs():
 
     json_files = sorted(glob.glob(os.path.join(incoming_dir, "*.json")))
     if not json_files:
-        print("ERREUR: Aucun fichier JSON trouvé dans data/")
+        print("ERREUR: Aucun fichier JSON trouvé dans data/incoming")
         return None
 
-    path = json_files[-1]
-    print(f"Chargement du fichier JSON: {path}")
+    loaded_files = []
+    for path in json_files:
+        print(f"Chargement du fichier JSON: {path}")
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if data is None:
+                    print(f"ERREUR: Fichier JSON vide: {path}")
+                    continue
+                print(f"OK: Chargé {len(data)} offres d'emploi depuis {path}")
+                loaded_files.append((data, path))
+        except Exception as e:
+            print(f"ERREUR lors de la lecture de {path}: {str(e)}")
 
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            if not data:
-                print("ERREUR: Fichier JSON vide")
-                return None
-            print(f"OK: Chargé {len(data)} offres d'emploi")
-            return data, path
-
-    except Exception as e:
-        print(f"ERREUR lors de la lecture: {str(e)}")
+    if not loaded_files:
+        print("ERREUR: Aucun fichier JSON chargé avec succès")
         return None
+
+    return loaded_files
 
 
 # =========================================================
@@ -140,6 +144,7 @@ def process_batch(buffer, texts, model):
     upsert_batch(buffer)
 
 def archive_file(json_path):
+    """Déplace le fichier JSON traité vers le dossier archive/."""
     data_dir = os.getenv("DATA_DIR", os.path.join(os.path.dirname(__file__), "..", "data"))
 
     archive_dir = os.path.join(
@@ -169,7 +174,7 @@ def archive_file(json_path):
 # =========================================================
 # PIPELINE PRINCIPAL
 # =========================================================
-def run_pipeline(batch_size=16):
+def run_pipeline(batch_size=32):
     """
     Exécute le pipeline d'indexation complet :
     1. Initialise la base
@@ -182,51 +187,52 @@ def run_pipeline(batch_size=16):
 
     result = load_jobs()
     if result is None:
-        raise Exception("Impossible de charger le fichier json")
-    
-    jobs,json_path = result
-
-    if len(jobs)==0:
-        print("Aucune donnée à traiter")
-        return
+        raise Exception("Impossible de charger les fichiers json")
 
     model = get_model()
     print(f"Modèle chargé - Traitement par batch de {batch_size}...")
 
-    buffer = []
-    texts = []
+    for jobs, json_path in result:
+        if len(jobs) == 0:
+            print(f"Aucune donnée à traiter dans {json_path}")
+            archive_file(json_path)
+            continue
 
-    for i, job in enumerate(jobs):
-        text = build_text(job)
-        location = extract_location(job)
-        competences = extract_competences(job)
+        buffer = []
+        texts = []
+        print(f"Traitement du fichier {json_path} ({len(jobs)} offres)...")
 
-        buffer.append({
-            "id": job["id"],
-            "title": job.get("intitule"),
-            "text": text,
-            "location": location,
-            "competences": competences,
-            "date_actualisation": parse_date(job.get("dateActualisation"))
-        })
+        for i, job in enumerate(jobs):
+            text = build_text(job)
+            location = extract_location(job)
+            competences = extract_competences(job)
 
-        texts.append(text)
+            buffer.append({
+                "id": job["id"],
+                "title": job.get("intitule"),
+                "text": text,
+                "location": location,
+                "competences": competences,
+                "date_actualisation": parse_date(job.get("dateActualisation"))
+            })
 
-        # Traitement par batch
-        if len(buffer) >= batch_size:
+            texts.append(text)
+
+            # Traitement par batch
+            if len(buffer) >= batch_size:
+                process_batch(buffer, texts, model)
+                buffer = []
+                texts = []
+                print(f"  Traité {i + 1}/{len(jobs)} offres...")
+
+        # Traitement du dernier batch
+        if buffer:
             process_batch(buffer, texts, model)
-            buffer = []
-            texts = []
-            print(f"  Traité {i + 1}/{len(jobs)} offres...")
+            print(f"  Traité {len(jobs)}/{len(jobs)} offres...")
 
-    # Traitement du dernier batch
-    if buffer:
-        process_batch(buffer, texts, model)
-        print(f"  Traité {len(jobs)}/{len(jobs)} offres...")
+        archive_file(json_path)
 
-    archive_file(json_path)
-
-    print("✓ Pipeline complété")
+    print("Pipeline complété")
 
 
 if __name__ == "__main__": # Pour exécuter le script directement

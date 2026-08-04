@@ -40,7 +40,7 @@ Job-market/
 │           └── datasources/
 │               └── prometheus.yml
 ├── scripts/
-│   ├── add.py                  # Pipeline d'indexation
+│   ├── indexation_offres.py    # Pipeline d'indexation
 │   ├── get_offres.py           # Collecte des offres
 │   └── utils.py
 ├── docker-compose.yaml
@@ -117,7 +117,7 @@ python3 scripts/get_offres.py
 ### 3. Indexer les offres dans PostgreSQL
 
 ```bash
-python3 scripts/add.py
+python3 scripts/indexation_offres.py
 ```
 
 ### 4. Lancer l’API FastAPI

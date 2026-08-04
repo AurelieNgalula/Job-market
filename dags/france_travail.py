@@ -13,7 +13,7 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.append(str(SCRIPTS_DIR))
 
 from get_offres import collect_offres
-from add import run_pipeline
+from indexation_offres import run_pipeline
 
 # Fuseau horaire France
 local_tz = "Europe/Paris"
@@ -52,7 +52,7 @@ with DAG(
         task_id="indexation_offres",
         python_callable=run_pipeline,
         op_kwargs={
-            "batch_size": 16,
+            "batch_size": 32,
         },
     )
     
