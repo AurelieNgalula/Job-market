@@ -94,7 +94,7 @@ docker compose ps
 - Documentation Swagger : http://localhost:8001/docs
 - Airflow UI : http://localhost:8080
 - Prometheus UI : http://localhost:9090
-- Grafana UI : http://localhost:3000 (cliquer sur skip sur la page login, puis aller dans dashboards et choisir le projet job market)
+- Grafana UI : http://localhost:3000 (identifiant: admin, mot de passe: admin, puis cliquer sur skip sur la page login, puis aller dans dashboards et choisir le projet job market)
 
 ## Lancement local sans Docker
 
@@ -135,6 +135,7 @@ L’application FastAPI expose les endpoints suivants :
 - GET /search?query=...&location=...&limit=10 : recherche JSON
 - GET /search-stream?query=... : recherche en streaming SSE
 - GET /health : vérification de l’état du service
+- GET /stats: retourne les métriques de suivi du monitoring
 
 ## Airflow
 
