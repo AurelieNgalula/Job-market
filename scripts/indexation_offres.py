@@ -223,12 +223,12 @@ def run_pipeline(batch_size=32):
                 process_batch(buffer, texts, model)
                 buffer = []
                 texts = []
-                print(f"  Traité {i + 1}/{len(jobs)} offres...")
+                print(f"Traité {i + 1}/{len(jobs)} offres...")
 
         # Traitement du dernier batch
         if buffer:
             process_batch(buffer, texts, model)
-            print(f"  Traité {len(jobs)}/{len(jobs)} offres...")
+            print(f"Traité {len(jobs)}/{len(jobs)} offres...")
 
         archive_file(json_path)
 

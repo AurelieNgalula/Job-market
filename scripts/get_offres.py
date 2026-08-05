@@ -158,5 +158,5 @@ def collect_offres():
     return output_path
 
 
-if __name__ == "__main__":
+if __name__ == "__main__": # lance du script directement
     collect_offres()

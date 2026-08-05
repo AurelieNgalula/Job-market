@@ -14,6 +14,12 @@ import sys
 from pathlib import Path
 import time
 from datetime import datetime
+from fastapi import FastAPI, Request
+from fastapi.responses import StreamingResponse, HTMLResponse
+from sqlalchemy import text
+from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Counter, Gauge
+
 try:
     from dotenv import load_dotenv
 except ImportError:  # pragma: no cover
@@ -22,13 +28,7 @@ except ImportError:  # pragma: no cover
     def load_dotenv(*args, **kwargs):
         return dotenv_values(*args, **kwargs)
 
-from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse, HTMLResponse
-from sqlalchemy import create_engine, text
-from sentence_transformers import SentenceTransformer
-from prometheus_fastapi_instrumentator import Instrumentator
-from prometheus_client import Counter, Gauge
-
+from utils import clean_text, get_model, ensure_table_exists, engine
 
 # =========================================================
 # MONITORING - Compteurs en mémoire
@@ -98,9 +98,6 @@ BACKEND_DIR = Path(__file__).resolve().parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from utils import clean_text
-
-load_dotenv()
 
 # =========================================================
 # APP FASTAPI
@@ -155,50 +152,6 @@ async def monitoring_middleware(request: Request, call_next):
         PROM_RESPONSE_TIME_BY_ENDPOINT_TOTAL_MS.labels(endpoint=endpoint).inc(duree_ms)
         PROM_RESPONSE_TIME_AVG_MS.set(stats["temps_reponse_moyen_ms"])
         PROM_LAST_REQUEST_TIMESTAMP.set(time.time())
-
-# =========================================================
-# DATABASE
-# =========================================================
-DB_POSTGRES_URL = (
-    os.getenv("DB_POSTGRES_URL")
-    or os.getenv("DATABASE_URL")
-)
-
-if not DB_POSTGRES_URL:
-    raise ValueError("DB_POSTGRES_URL is not set in environment variables.")    
-
-engine = create_engine(DB_POSTGRES_URL, pool_pre_ping=True)
-# pool_pre_ping=True tester une connexion avant de l'utiliser, pour éviter les erreurs de connexion expirée.
-
-# =========================================================
-# MODEL (lazy loading)
-# =========================================================
-_model = None
-
-def get_model():
-    """Charge le modèle d'embeddings."""
-    global _model
-    if _model is None:
-        _model = SentenceTransformer("all-MiniLM-L6-v2")
-    return _model
-
-
-def ensure_table_exists():
-    """Crée la table de recherche si elle n'existe pas."""
-    with engine.begin() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS base_embedding (
-                id TEXT PRIMARY KEY,
-                title TEXT,
-                text TEXT,
-                location TEXT,
-                competences TEXT[],
-                date_actualisation TIMESTAMP,
-                embedding VECTOR(384)
-            );
-        """))
-
 
 # =========================================================
 # SEARCH STREAMING (core function)
@@ -257,10 +210,15 @@ def ui(request: Request):
     return HTMLResponse(template_path.read_text(encoding="utf-8"))
 
 
-@app.get("/search")
-def search_api( query: str = None, location: str = None, limit: int = 10):
-    """Endpoint de recherche simple (retourne JSON)."""
+@app.on_event("startup")
+def startup():
+    """Initialisation à chaud de l'application."""
     ensure_table_exists()
+
+
+@app.get("/search")
+def search_api(query: str = None, location: str = None, limit: int = 10):
+    """Endpoint de recherche simple (retourne JSON)."""
     if not query:
         return []
     stats["total_recherches"] += 1

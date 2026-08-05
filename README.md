@@ -150,6 +150,7 @@ Il est planifié tous les jours à 22:00 (Europe/Paris).
 
 - Les fichiers JSON collectés sont stockés dans data/incoming puis déplacés vers data/archive après indexation.
 - La recherche sémantique repose sur le modèle sentence-transformers all-MiniLM-L6-v2.
+- Le backend FastAPI initialise automatiquement la table `base_embedding` au démarrage si la base PostgreSQL est accessible.
 - La base PostgreSQL doit contenir l’extension vector pour les opérations pgvector.
 
 ## Dépendances principales
